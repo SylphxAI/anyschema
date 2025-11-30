@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1 (2025-11-30)
+
+### 🐛 Bug Fixes
+
+- add packageManager field for correct bun detection ([6bd804e](https://github.com/SylphxAI/anyschema/commit/6bd804e0af9fcfea4d734b9b16213c901890cd58))
+
 ## 0.1.0 (2025-11-30)
 
 ### 🐛 Bug Fixes
