@@ -1,0 +1,29 @@
+# Changelog
+
+## 0.3.0 (2025-11-30)
+
+### ✨ Features
+
+- 💥 zero dependencies with pure structural typing ([57cc765](https://github.com/SylphxAI/anyschema/commit/57cc765aef6af83e5337908a50969ba0804b39c8))
+- 💥 rebrand to AnySchema with universal schema utilities ([146cefa](https://github.com/SylphxAI/anyschema/commit/146cefa12e726064b69f4af317282b956d9f573a))
+- initial implementation of standard-schema-to-json ([b4d8e90](https://github.com/SylphxAI/anyschema/commit/b4d8e90b5c7067c168f4e5ce5409a5af35c6ae81))
+
+### ♻️ Refactoring
+
+- complete rewrite with duck typing and zero dependencies ([28576c6](https://github.com/SylphxAI/anyschema/commit/28576c6f971404014e0ce0c7469be77b79710853))
+- improve tree-shaking for async API ([d9a701b](https://github.com/SylphxAI/anyschema/commit/d9a701b6728c34395f0d82afa64409cce4e4da87))
+
+### ✅ Tests
+
+- add comprehensive test suite for all libraries ([9df900c](https://github.com/SylphxAI/anyschema/commit/9df900c2f66b914267ded8014442be95f84b7460))
+
+### 🔧 Chores
+
+- setup @sylphx/doctor tooling and standards ([e890561](https://github.com/SylphxAI/anyschema/commit/e890561489bbae722aedbd3fe9dd1f564b314db0))
+
+### 💥 Breaking Changes
+
+- zero dependencies with pure structural typing ([57cc765](https://github.com/SylphxAI/anyschema/commit/57cc765aef6af83e5337908a50969ba0804b39c8))
+  Complete architecture rewrite
+- rebrand to AnySchema with universal schema utilities ([146cefa](https://github.com/SylphxAI/anyschema/commit/146cefa12e726064b69f4af317282b956d9f573a))
+  Package renamed from standard-schema-to-json to anyschema
