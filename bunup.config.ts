@@ -8,5 +8,5 @@ export default defineConfig({
 	sourcemap: true,
 	splitting: false,
 	minify: false,
-	external: ['zod', 'zod-to-json-schema', 'valibot', '@valibot/to-json-schema', 'arktype'],
+	external: ['zod', 'zod/v4', 'zod-to-json-schema', 'valibot', '@valibot/to-json-schema', 'arktype'],
 })

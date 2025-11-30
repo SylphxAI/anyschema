@@ -373,13 +373,34 @@ export type JsonSchemaCapable =
 	| { '~toJsonSchema': () => unknown }
 	// ArkType built-in
 	| { toJsonSchema: () => unknown; infer: unknown }
-	// Zod (via zod-to-json-schema)
+	// Zod v4 (built-in toJSONSchema, requires async)
+	| { _zod: unknown; '~standard': unknown }
+	// Zod v3 (via zod-to-json-schema)
 	| { _def: unknown; _output: unknown; safeParse: unknown }
 	// Valibot (via @valibot/to-json-schema)
 	| { kind: string; types: { output: unknown } }
 	// TypeBox (is JSON Schema)
 	| { static: unknown; type?: string; properties?: unknown }
 	// Effect Schema (via built-in)
+	| { Type: unknown; ast: unknown }
+
+/**
+ * Schemas that support SYNC JSON Schema conversion
+ *
+ * Note: Zod v4 is NOT included because it requires async dynamic import.
+ * Use toJsonSchema() (async) for Zod v4 schemas.
+ */
+export type JsonSchemaSyncCapable =
+	// AnySchema Protocol with toJsonSchema
+	| { '~toJsonSchema': () => unknown }
+	// ArkType built-in
+	| { toJsonSchema: () => unknown; infer: unknown }
+	// Zod v3 only (NOT v4 - v4 has _zod property)
+	| { _def: unknown; _output: unknown; safeParse: unknown; _zod?: never }
+	// TypeBox (is JSON Schema)
+	| { static: unknown; type?: string; properties?: unknown }
+	// Valibot and Effect are also problematic for sync, but we keep them for now
+	| { kind: string; types: { output: unknown } }
 	| { Type: unknown; ast: unknown }
 
 /**

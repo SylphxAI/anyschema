@@ -987,11 +987,11 @@ describe('Zod v4 Native (zod/v4)', () => {
 			expect(jsonSchema.enum).toEqual(['a', 'b', 'c'])
 		})
 
-		it('should convert Zod v4 schema synchronously', () => {
+		it('should throw for Zod v4 with toJsonSchemaSync (use async instead)', () => {
 			const schema = zv4.object({ name: zv4.string() })
-			const jsonSchema = toJsonSchemaSync(schema)
-			expect(jsonSchema.type).toBe('object')
-			expect(jsonSchema.properties).toHaveProperty('name')
+			expect(() => toJsonSchemaSync(schema)).toThrow(
+				'Zod v4 does not support toJsonSchemaSync(). Use async toJsonSchema() instead.'
+			)
 		})
 
 		it('should match native zod/v4 toJSONSchema output', async () => {

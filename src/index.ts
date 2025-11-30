@@ -73,6 +73,7 @@ export type {
 	JSONSchema,
 	// Capability types
 	JsonSchemaCapable,
+	JsonSchemaSyncCapable,
 	MetadataCapable,
 	RuntypesLike,
 	// Metadata
@@ -103,6 +104,7 @@ import type {
 	InferOutput,
 	JSONSchema,
 	JsonSchemaCapable,
+	JsonSchemaSyncCapable,
 	MetadataCapable,
 	SchemaMetadata,
 	SchemaVendor,
@@ -312,10 +314,20 @@ export async function parseAsync<T extends InferCapable>(
 // ============================================================================
 
 /**
- * Convert any supported schema to JSON Schema
+ * Convert any supported schema to JSON Schema (async)
  *
  * Automatically detects schema type and uses appropriate converter.
- * Converters are dynamically imported for tree-shaking.
+ * Uses dynamic import to load converters from user's installed packages.
+ *
+ * **Fully supported (no extra deps):**
+ * - Zod v4: Built-in toJSONSchema()
+ * - ArkType: Built-in toJsonSchema() method
+ * - TypeBox: Schema IS JSON Schema
+ *
+ * **Requires extra package:**
+ * - Zod v3: Requires `zod-to-json-schema`
+ * - Valibot: Requires `@valibot/to-json-schema`
+ * - Effect: Requires `@effect/schema`
  *
  * @param schema - Any supported schema with JSON Schema capability
  * @returns Promise resolving to JSON Schema
@@ -349,9 +361,16 @@ export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
 /**
  * Sync version of toJsonSchema
  *
- * Note: Uses require() for converters. May not work in all environments.
+ * **Limitations:**
+ * - Zod v4: NOT supported (requires async). Use toJsonSchema() instead.
+ * - Zod v3: Requires `zod-to-json-schema` package installed.
+ * - Valibot: Requires `@valibot/to-json-schema` package installed.
+ *
+ * **Fully supported (no extra deps):**
+ * - ArkType: Built-in toJsonSchema() method
+ * - TypeBox: Schema IS JSON Schema
  */
-export function toJsonSchemaSync<T extends JsonSchemaCapable>(schema: T): JSONSchema
+export function toJsonSchemaSync<T extends JsonSchemaSyncCapable>(schema: T): JSONSchema
 export function toJsonSchemaSync(schema: unknown): JSONSchema {
 	// 1. AnySchema Protocol with toJsonSchema
 	if (
@@ -951,9 +970,8 @@ async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Prom
 		}
 		case 'effect': {
 			try {
-				// Dynamic require to avoid type errors when @effect/schema is not installed
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
-				const effectSchema = require('@effect/schema') as {
+				// @ts-expect-error - dynamic import of optional dependency
+				const effectSchema = (await import('@effect/schema')) as {
 					JSONSchema?: { make: (s: unknown) => unknown }
 				}
 				if (!effectSchema.JSONSchema) {
@@ -975,17 +993,12 @@ async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Prom
 function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSchema {
 	switch (vendor) {
 		case 'zod': {
-			// Zod v4 native schemas have _zod property, use toJSONSchema from zod/v4
+			// Zod v4: NOT supported in sync mode
+			// toJSONSchema is a static function that requires dynamic import to avoid ESM/CJS dual package issue
 			if (typeof schema === 'object' && schema !== null && '_zod' in schema) {
-				try {
-					// eslint-disable-next-line @typescript-eslint/no-require-imports
-					const { toJSONSchema } = require('zod/v4') as {
-						toJSONSchema: (s: unknown) => JSONSchema
-					}
-					return toJSONSchema(schema)
-				} catch {
-					throw new Error('Zod v4 schema detected but zod/v4 not available')
-				}
+				throw new Error(
+					'Zod v4 does not support toJsonSchemaSync(). Use async toJsonSchema() instead.'
+				)
 			}
 			// Zod v3 schemas have _def property, use zod-to-json-schema
 			try {

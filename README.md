@@ -232,9 +232,9 @@ const user = await parseAsync(asyncSchema, data);
 
 ### JSON Schema
 
-#### `toJsonSchema(schema)`
+#### `toJsonSchema(schema)` (async)
 
-Convert a schema to JSON Schema (async, tree-shakable).
+Convert a schema to JSON Schema. Uses dynamic imports for zero bundled dependencies.
 
 ```typescript
 function toJsonSchema<T extends JsonSchemaCapable>(
@@ -247,13 +247,35 @@ const jsonSchema = await toJsonSchema(zodSchema);
 // { type: 'object', properties: { ... } }
 ```
 
+**Support Matrix:**
+
+| Library | Support | Notes |
+|---------|---------|-------|
+| **Zod v4** | ✅ Built-in | No extra deps |
+| **Zod v3** | ⚠️ Requires | `npm i zod-to-json-schema` |
+| **ArkType** | ✅ Built-in | No extra deps |
+| **TypeBox** | ✅ Built-in | Schema IS JSON Schema |
+| **Valibot** | ⚠️ Requires | `npm i @valibot/to-json-schema` |
+| **Effect** | ⚠️ Requires | `@effect/schema` package |
+
 #### `toJsonSchemaSync(schema)`
 
-Sync version (uses `require()`).
+Sync version. **Note:** Does not support Zod v4 (use async version instead).
 
 ```typescript
-const jsonSchema = toJsonSchemaSync(zodSchema);
+const jsonSchema = toJsonSchemaSync(arktypeSchema); // ✅ Works
+const jsonSchema = toJsonSchemaSync(zodV4Schema);   // ❌ Throws error
 ```
+
+**Sync Support:**
+
+| Library | Sync Support |
+|---------|--------------|
+| **Zod v4** | ❌ Use `toJsonSchema()` async |
+| **Zod v3** | ⚠️ Requires `zod-to-json-schema` |
+| **ArkType** | ✅ |
+| **TypeBox** | ✅ |
+| **Valibot** | ⚠️ Requires `@valibot/to-json-schema` |
 
 ### Metadata
 
