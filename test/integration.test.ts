@@ -14,11 +14,6 @@ import {
   isArkTypeSchema,
 } from '../src/index.js';
 
-// Subpath imports
-import { toJsonSchema as zodToJsonSchema, validate as zodValidate } from '../src/zod.js';
-import { toJsonSchema as valibotToJsonSchema, validate as valibotValidate } from '../src/valibot.js';
-import { toJsonSchema as arktypeToJsonSchema, validate as arktypeValidate } from '../src/arktype.js';
-
 describe('toJsonSchema (async)', () => {
   it('should convert Zod schema', async () => {
     const schema = z.object({ name: z.string(), age: z.number() });
@@ -181,59 +176,6 @@ describe('validateAsync', () => {
   });
 });
 
-describe('Subpath exports', () => {
-  describe('anyschema/zod', () => {
-    it('should convert Zod schema', () => {
-      const schema = z.object({ name: z.string() });
-      const result = zodToJsonSchema(schema);
-
-      expect(result.type).toBe('object');
-      expect(result.properties).toHaveProperty('name');
-    });
-
-    it('should validate with Zod', () => {
-      const schema = z.object({ name: z.string() });
-      const result = zodValidate(schema, { name: 'John' });
-
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('anyschema/valibot', () => {
-    it('should convert Valibot schema', () => {
-      const schema = v.object({ name: v.string() });
-      const result = valibotToJsonSchema(schema);
-
-      expect(result.type).toBe('object');
-      expect(result.properties).toHaveProperty('name');
-    });
-
-    it('should validate with Valibot', () => {
-      const schema = v.object({ name: v.string() });
-      const result = valibotValidate(schema, { name: 'John' });
-
-      expect(result.success).toBe(true);
-    });
-  });
-
-  describe('anyschema/arktype', () => {
-    it('should convert ArkType schema', () => {
-      const schema = type({ name: 'string' });
-      const result = arktypeToJsonSchema(schema);
-
-      expect(result.type).toBe('object');
-      expect(result.properties).toHaveProperty('name');
-    });
-
-    it('should validate with ArkType', () => {
-      const schema = type({ name: 'string' });
-      const result = arktypeValidate(schema, { name: 'John' });
-
-      expect(result.success).toBe(true);
-    });
-  });
-});
-
 describe('Detection utilities', () => {
   describe('detectVendor', () => {
     it('should detect Zod schema', () => {
@@ -278,5 +220,17 @@ describe('Detection utilities', () => {
       expect(isArkTypeSchema(z.string())).toBe(false);
       expect(isArkTypeSchema(v.string())).toBe(false);
     });
+  });
+});
+
+describe('Invalid schema rejection', () => {
+  it('should return failure for plain object', () => {
+    const result = validate({} as any, 'data');
+    expect(result.success).toBe(false);
+  });
+
+  it('should return failure for null', () => {
+    const result = validate(null as any, 'data');
+    expect(result.success).toBe(false);
   });
 });

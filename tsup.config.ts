@@ -1,12 +1,7 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: [
-    'src/index.ts',
-    'src/zod.ts',
-    'src/valibot.ts',
-    'src/arktype.ts',
-  ],
+  entry: ['src/index.ts'],
   format: ['esm', 'cjs'],
   dts: true,
   clean: true,
@@ -14,6 +9,7 @@ export default defineConfig({
   splitting: false,
   treeshake: true,
   minify: false,
+  // External - these are dynamically imported at runtime
   external: [
     'zod',
     'zod-to-json-schema',

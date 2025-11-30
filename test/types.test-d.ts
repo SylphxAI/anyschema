@@ -2,21 +2,15 @@ import { describe, expectTypeOf, it } from 'vitest';
 import { z } from 'zod';
 import * as v from 'valibot';
 import { type } from 'arktype';
-import type { JSONSchema, InferOutput, InferInput, ValidationResult, AnySchema } from '../src/types.js';
+import type {
+  JSONSchema,
+  InferOutput,
+  InferInput,
+  ValidationResult,
+  AnySchema,
+  IsValidSchema,
+} from '../src/types.js';
 import { toJsonSchema, toJsonSchemaSync, validate, validateAsync } from '../src/index.js';
-import { toJsonSchema as zodToJsonSchema, validate as zodValidate } from '../src/zod.js';
-import { toJsonSchema as valibotToJsonSchema, validate as valibotValidate } from '../src/valibot.js';
-import { toJsonSchema as arktypeToJsonSchema, validate as arktypeValidate } from '../src/arktype.js';
-
-describe('toJsonSchema types', () => {
-  it('should return Promise<JSONSchema> for async version', () => {
-    expectTypeOf(toJsonSchema).returns.toEqualTypeOf<Promise<JSONSchema>>();
-  });
-
-  it('should return JSONSchema for sync version', () => {
-    expectTypeOf(toJsonSchemaSync).returns.toEqualTypeOf<JSONSchema>();
-  });
-});
 
 describe('InferOutput type', () => {
   it('should infer Zod output type', () => {
@@ -36,6 +30,11 @@ describe('InferOutput type', () => {
     type Output = InferOutput<typeof schema>;
     expectTypeOf<Output>().toEqualTypeOf<{ name: string; age: number }>();
   });
+
+  it('should return never for invalid schema', () => {
+    type Output = InferOutput<{ foo: string }>;
+    expectTypeOf<Output>().toEqualTypeOf<never>();
+  });
 });
 
 describe('InferInput type', () => {
@@ -49,6 +48,44 @@ describe('InferInput type', () => {
     const schema = v.object({ name: v.string() });
     type Input = InferInput<typeof schema>;
     expectTypeOf<Input>().toEqualTypeOf<{ name: string }>();
+  });
+
+  it('should return never for invalid schema', () => {
+    type Input = InferInput<{ foo: string }>;
+    expectTypeOf<Input>().toEqualTypeOf<never>();
+  });
+});
+
+describe('IsValidSchema type', () => {
+  it('should return true for valid schemas', () => {
+    const zodSchema = z.string();
+    type IsZodValid = IsValidSchema<typeof zodSchema>;
+    expectTypeOf<IsZodValid>().toEqualTypeOf<true>();
+
+    const valibotSchema = v.string();
+    type IsValibotValid = IsValidSchema<typeof valibotSchema>;
+    expectTypeOf<IsValibotValid>().toEqualTypeOf<true>();
+
+    const arktypeSchema = type('string');
+    type IsArkTypeValid = IsValidSchema<typeof arktypeSchema>;
+    expectTypeOf<IsArkTypeValid>().toEqualTypeOf<true>();
+  });
+
+  it('should return false for invalid schemas', () => {
+    type IsInvalid = IsValidSchema<{ foo: string }>;
+    expectTypeOf<IsInvalid>().toEqualTypeOf<false>();
+  });
+});
+
+describe('toJsonSchema types', () => {
+  it('should return Promise<JSONSchema> for async version', () => {
+    const schema = z.string();
+    expectTypeOf(toJsonSchema(schema)).toEqualTypeOf<Promise<JSONSchema>>();
+  });
+
+  it('should return JSONSchema for sync version', () => {
+    const schema = z.string();
+    expectTypeOf(toJsonSchemaSync(schema)).toEqualTypeOf<JSONSchema>();
   });
 });
 
@@ -92,40 +129,22 @@ describe('validateAsync types', () => {
   });
 });
 
-describe('Subpath export types', () => {
-  it('zodToJsonSchema should accept ZodType and return JSONSchema', () => {
-    expectTypeOf(zodToJsonSchema).parameter(0).toMatchTypeOf<z.ZodType>();
-    expectTypeOf(zodToJsonSchema).returns.toEqualTypeOf<JSONSchema>();
-  });
-
-  it('zodValidate should return ValidationResult', () => {
-    const schema = z.string();
-    expectTypeOf(zodValidate(schema, '')).toEqualTypeOf<ValidationResult<string>>();
-  });
-
-  it('valibotToJsonSchema should return JSONSchema', () => {
-    expectTypeOf(valibotToJsonSchema).returns.toEqualTypeOf<JSONSchema>();
-  });
-
-  it('arktypeToJsonSchema should accept Type and return JSONSchema', () => {
-    expectTypeOf(arktypeToJsonSchema).parameter(0).toMatchTypeOf<type.Any>();
-    expectTypeOf(arktypeToJsonSchema).returns.toEqualTypeOf<JSONSchema>();
-  });
-});
-
 describe('AnySchema type', () => {
-  it('should accept Zod schemas', () => {
-    const schema: AnySchema = z.string();
+  it('should accept Zod schemas structurally', () => {
+    const schema = z.string();
+    // Zod schemas match ZodLike structure
     expectTypeOf(schema).toMatchTypeOf<AnySchema>();
   });
 
-  it('should accept Valibot schemas', () => {
-    const schema: AnySchema = v.string();
+  it('should accept Valibot schemas structurally', () => {
+    const schema = v.string();
+    // Valibot schemas match ValibotLike structure
     expectTypeOf(schema).toMatchTypeOf<AnySchema>();
   });
 
-  it('should accept ArkType schemas', () => {
-    const schema: AnySchema = type('string');
+  it('should accept ArkType schemas structurally', () => {
+    const schema = type('string');
+    // ArkType schemas match ArkTypeLike structure
     expectTypeOf(schema).toMatchTypeOf<AnySchema>();
   });
 });
