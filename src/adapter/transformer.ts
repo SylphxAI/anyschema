@@ -1,13 +1,28 @@
 /**
  * Core JSON Schema Transformer
  *
- * Uses adapters to convert any schema to JSON Schema.
+ * Blind-call first, adapter fallback.
  * Zero dependencies - pure duck typing.
  */
 
 import type { JSONSchema } from '../types.js'
 import type { SchemaConstraints } from './types.js'
 import { findAdapter } from './types.js'
+
+// ============================================================================
+// Blind-call helpers
+// ============================================================================
+
+/** Try to call native toJsonSchema/jsonSchema method */
+function tryNativeJsonSchema(schema: unknown): JSONSchema | null {
+	// ArkType: .toJsonSchema()
+	if (typeof (schema as { toJsonSchema?: unknown }).toJsonSchema === 'function') {
+		return (schema as { toJsonSchema: () => JSONSchema }).toJsonSchema()
+	}
+	// Zod v4: .jsonSchema() - but need zod-to-json-schema, skip for now
+	// Most libraries don't have native JSON Schema export
+	return null
+}
 
 // ============================================================================
 // Context for recursive conversion
@@ -36,8 +51,17 @@ function createContext(): TransformContext {
 
 /**
  * Convert any supported schema to JSON Schema
+ *
+ * Strategy: Blind-call first, adapter fallback
+ * 1. If schema has native toJsonSchema() - use it
+ * 2. Otherwise - build via adapter
  */
 export function toJsonSchema(schema: unknown): JSONSchema {
+	// 1. Blind-call: native method first
+	const native = tryNativeJsonSchema(schema)
+	if (native) return native
+
+	// 2. Fallback: build via adapter
 	const ctx = createContext()
 	const result = transform(schema, ctx)
 

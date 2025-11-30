@@ -96,6 +96,7 @@ export type {
 // Re-export error class
 export { ValidationError } from './types.js'
 
+import { tryToJsonSchema, tryValidate, tryValidateAsync } from './blind-call.js'
 import { detect, isAnySchemaProtocol, isStandardSchema } from './detection.js'
 // Import for internal use
 import type {
@@ -154,7 +155,11 @@ export function validate(schema: unknown, data: unknown): ValidationResult<unkno
 		return normalizeStandardSchemaResult(result)
 	}
 
-	// 3. Duck typing
+	// 3. Blind-call: try native methods first (most efficient)
+	const blindResult = tryValidate(schema, data)
+	if (blindResult) return blindResult
+
+	// 4. Fallback: vendor-specific (for edge cases)
 	const detection = detect(schema)
 	if (!detection) {
 		return {
@@ -203,7 +208,11 @@ export async function validateAsync(
 		return normalizeStandardSchemaResult(result)
 	}
 
-	// 3. Duck typing
+	// 3. Blind-call: try native async methods first
+	const blindResult = await tryValidateAsync(schema, data)
+	if (blindResult) return blindResult
+
+	// 4. Fallback: vendor-specific
 	const detection = detect(schema)
 	if (!detection) {
 		return {
@@ -339,17 +348,11 @@ export async function parseAsync<T extends InferCapable>(
  */
 export async function toJsonSchema<T extends JsonSchemaCapable>(schema: T): Promise<JSONSchema>
 export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
-	// 1. AnySchema Protocol with toJsonSchema
-	if (
-		typeof schema === 'object' &&
-		schema !== null &&
-		'~toJsonSchema' in schema &&
-		typeof (schema as Record<string, unknown>)['~toJsonSchema'] === 'function'
-	) {
-		return (schema as { '~toJsonSchema': () => JSONSchema })['~toJsonSchema']()
-	}
+	// 1. Blind-call: try native methods first (most efficient)
+	const native = tryToJsonSchema(schema)
+	if (native) return native
 
-	// 2. Duck typing
+	// 2. Duck typing + vendor-specific
 	const detection = detect(schema)
 	if (!detection) {
 		throw new Error('Unsupported schema type. Expected a schema with JSON Schema support.')
@@ -372,17 +375,11 @@ export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
  */
 export function toJsonSchemaSync<T extends JsonSchemaSyncCapable>(schema: T): JSONSchema
 export function toJsonSchemaSync(schema: unknown): JSONSchema {
-	// 1. AnySchema Protocol with toJsonSchema
-	if (
-		typeof schema === 'object' &&
-		schema !== null &&
-		'~toJsonSchema' in schema &&
-		typeof (schema as Record<string, unknown>)['~toJsonSchema'] === 'function'
-	) {
-		return (schema as { '~toJsonSchema': () => JSONSchema })['~toJsonSchema']()
-	}
+	// 1. Blind-call: try native methods first
+	const native = tryToJsonSchema(schema)
+	if (native) return native
 
-	// 2. Duck typing
+	// 2. Duck typing + vendor-specific
 	const detection = detect(schema)
 	if (!detection) {
 		throw new Error('Unsupported schema type. Expected a schema with JSON Schema support.')
