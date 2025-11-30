@@ -30,7 +30,8 @@
 		"dev": "bunup --watch",
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
-		"prepublishOnly": "bunx @sylphx/doctor prepublish && bun run build",
+		"prepack": "bun run build",
+		"prepublishOnly": "bunx @sylphx/doctor prepublish",
 		"lint": "biome check .",
 		"format": "biome format --write ."
 	},
