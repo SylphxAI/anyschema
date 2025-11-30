@@ -9,8 +9,20 @@ import type {
   ValidationResult,
   AnySchema,
   IsValidSchema,
+  AnySchemaV1,
+  StandardSchemaV1,
 } from '../src/types.js';
-import { toJsonSchema, toJsonSchemaSync, validate, validateAsync } from '../src/index.js';
+import {
+  toJsonSchema,
+  toJsonSchemaSync,
+  validate,
+  validateAsync,
+  is,
+  parse,
+  parseAsync,
+  assert,
+  createSchema,
+} from '../src/index.js';
 
 describe('InferOutput type', () => {
   it('should infer Zod output type', () => {
@@ -34,6 +46,18 @@ describe('InferOutput type', () => {
   it('should return never for invalid schema', () => {
     type Output = InferOutput<{ foo: string }>;
     expectTypeOf<Output>().toEqualTypeOf<never>();
+  });
+
+  it('should infer AnySchema Protocol output type', () => {
+    const schema = createSchema<string>({
+      vendor: 'test',
+      validate: (d) =>
+        typeof d === 'string'
+          ? { success: true, data: d }
+          : { success: false, issues: [{ message: '' }] },
+    });
+    type Output = InferOutput<typeof schema>;
+    expectTypeOf<Output>().toEqualTypeOf<string>();
   });
 });
 
@@ -129,6 +153,114 @@ describe('validateAsync types', () => {
   });
 });
 
+describe('is() type guard', () => {
+  it('should narrow type for Zod', () => {
+    const schema = z.object({ name: z.string() });
+    const data: unknown = { name: 'test' };
+
+    if (is(schema, data)) {
+      expectTypeOf(data).toEqualTypeOf<{ name: string }>();
+    }
+  });
+
+  it('should narrow type for Valibot', () => {
+    const schema = v.object({ name: v.string() });
+    const data: unknown = { name: 'test' };
+
+    if (is(schema, data)) {
+      expectTypeOf(data).toEqualTypeOf<{ name: string }>();
+    }
+  });
+
+  it('should narrow type for ArkType', () => {
+    const schema = type({ name: 'string' });
+    const data: unknown = { name: 'test' };
+
+    if (is(schema, data)) {
+      expectTypeOf(data).toEqualTypeOf<{ name: string }>();
+    }
+  });
+});
+
+describe('parse() types', () => {
+  it('should return inferred type for Zod', () => {
+    const schema = z.object({ name: z.string() });
+    const result = parse(schema, { name: 'test' });
+    expectTypeOf(result).toEqualTypeOf<{ name: string }>();
+  });
+
+  it('should return inferred type for Valibot', () => {
+    const schema = v.object({ name: v.string() });
+    const result = parse(schema, { name: 'test' });
+    expectTypeOf(result).toEqualTypeOf<{ name: string }>();
+  });
+
+  it('should return inferred type for ArkType', () => {
+    const schema = type({ name: 'string' });
+    const result = parse(schema, { name: 'test' });
+    expectTypeOf(result).toEqualTypeOf<{ name: string }>();
+  });
+});
+
+describe('parseAsync() types', () => {
+  it('should return Promise with inferred type', () => {
+    const schema = z.string();
+    const result = parseAsync(schema, 'test');
+    expectTypeOf(result).toEqualTypeOf<Promise<string>>();
+  });
+});
+
+describe('assert() types', () => {
+  it('should narrow type after assertion for Zod', () => {
+    const schema = z.object({ name: z.string() });
+    const data: unknown = { name: 'test' };
+
+    assert(schema, data);
+    expectTypeOf(data).toEqualTypeOf<{ name: string }>();
+  });
+
+  it('should narrow type after assertion for Valibot', () => {
+    const schema = v.object({ name: v.string() });
+    const data: unknown = { name: 'test' };
+
+    assert(schema, data);
+    expectTypeOf(data).toEqualTypeOf<{ name: string }>();
+  });
+});
+
+describe('createSchema() types', () => {
+  it('should create typed AnySchemaV1', () => {
+    const schema = createSchema<string>({
+      vendor: 'test',
+      validate: (d) =>
+        typeof d === 'string'
+          ? { success: true, data: d }
+          : { success: false, issues: [{ message: '' }] },
+    });
+
+    expectTypeOf(schema).toMatchTypeOf<AnySchemaV1<string, string>>();
+  });
+
+  it('should support different input/output types', () => {
+    const schema = createSchema<number, string>({
+      vendor: 'test',
+      validate: (d) => {
+        const num = Number(d);
+        if (!isNaN(num)) {
+          return { success: true, data: num };
+        }
+        return { success: false, issues: [{ message: '' }] };
+      },
+    });
+
+    type Input = InferInput<typeof schema>;
+    type Output = InferOutput<typeof schema>;
+
+    expectTypeOf<Input>().toEqualTypeOf<string>();
+    expectTypeOf<Output>().toEqualTypeOf<number>();
+  });
+});
+
 describe('AnySchema type', () => {
   it('should accept Zod schemas structurally', () => {
     const schema = z.string();
@@ -146,5 +278,46 @@ describe('AnySchema type', () => {
     const schema = type('string');
     // ArkType schemas match ArkTypeLike structure
     expectTypeOf(schema).toMatchTypeOf<AnySchema>();
+  });
+
+  it('should accept AnySchema Protocol', () => {
+    const schema = createSchema<string>({
+      vendor: 'test',
+      validate: (d) =>
+        typeof d === 'string'
+          ? { success: true, data: d }
+          : { success: false, issues: [{ message: '' }] },
+    });
+    expectTypeOf(schema).toMatchTypeOf<AnySchema>();
+  });
+});
+
+describe('Protocol types', () => {
+  it('AnySchemaV1 should have correct structure', () => {
+    type Schema = AnySchemaV1<string>;
+
+    expectTypeOf<Schema['~anyschema']>().toMatchTypeOf<{
+      version: 1;
+      vendor: string;
+    }>();
+
+    expectTypeOf<Schema['~types']>().toMatchTypeOf<{
+      input: string;
+      output: string;
+    }>();
+
+    expectTypeOf<Schema['~validate']>().toMatchTypeOf<
+      (data: unknown) => { success: true; data: string } | { success: false; issues: readonly { message: string }[] }
+    >();
+  });
+
+  it('StandardSchemaV1 should have correct structure', () => {
+    type Schema = StandardSchemaV1<string>;
+
+    expectTypeOf<Schema['~standard']>().toMatchTypeOf<{
+      version: 1;
+      vendor: string;
+      validate: (data: unknown) => unknown;
+    }>();
   });
 });

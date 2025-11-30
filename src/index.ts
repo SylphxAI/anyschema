@@ -5,7 +5,7 @@
  *
  * @example
  * ```typescript
- * import { toJsonSchema, validate, type InferOutput } from 'anyschema';
+ * import { toJsonSchema, validate, is, parse, type InferOutput } from 'anyschema';
  * import { z } from 'zod';
  *
  * const schema = z.object({ name: z.string() });
@@ -19,6 +19,14 @@
  *   console.log(result.data); // typed as { name: string }
  * }
  *
+ * // Type guard
+ * if (is(schema, data)) {
+ *   data.name; // typed!
+ * }
+ *
+ * // Parse (throws on error)
+ * const user = parse(schema, data);
+ *
  * // JSON Schema conversion
  * const jsonSchema = await toJsonSchema(schema);
  * ```
@@ -26,39 +34,83 @@
 
 // Re-export all types
 export type {
+  // Protocol types
+  AnySchemaV1,
+  StandardSchemaV1,
   // Schema structure types
   ZodLike,
   ValibotLike,
   ArkTypeLike,
+  YupLike,
+  JoiLike,
+  IoTsLike,
+  SuperstructLike,
+  TypeBoxLike,
+  EffectSchemaLike,
+  RuntypesLike,
   AnySchema,
   // Type inference
   InferOutput,
   InferInput,
   IsValidSchema,
   AssertValidSchema,
+  // Capability types
+  JsonSchemaCapable,
+  InferCapable,
+  AsyncCapable,
+  MetadataCapable,
   // Vendor
   SchemaVendor,
+  DetectionResult,
   // Validation
   ValidationResult,
   ValidationSuccess,
   ValidationFailure,
   ValidationIssue,
+  // Metadata
+  SchemaMetadata,
   // JSON Schema
   JSONSchema,
 } from './types.js';
 
+// Re-export error class
+export { ValidationError } from './types.js';
+
 // Re-export detection utilities
-export { detectVendor, isZodSchema, isValibotSchema, isArkTypeSchema } from './detection.js';
+export {
+  detectVendor,
+  detect,
+  isAnySchemaProtocol,
+  isStandardSchema,
+  isZodSchema,
+  isValibotSchema,
+  isArkTypeSchema,
+  isYupSchema,
+  isJoiSchema,
+  isIoTsSchema,
+  isSuperstructSchema,
+  isTypeBoxSchema,
+  isEffectSchema,
+  isRuntypesSchema,
+  supportsJsonSchema,
+  supportsAsync,
+  hasMetadata,
+} from './detection.js';
 
 // Import for internal use
 import type {
   JSONSchema,
   ValidationResult,
   InferOutput,
-  AssertValidSchema,
+  InferCapable,
+  JsonSchemaCapable,
+  MetadataCapable,
+  SchemaMetadata,
   SchemaVendor,
+  AnySchemaV1,
 } from './types.js';
-import { detectVendor } from './detection.js';
+import { ValidationError } from './types.js';
+import { detect, isAnySchemaProtocol, isStandardSchema } from './detection.js';
 
 // ============================================================================
 // Validation
@@ -70,7 +122,7 @@ import { detectVendor } from './detection.js';
  * Uses duck typing to detect schema type and call appropriate validation method.
  * Returns a unified result object with success/failure status.
  *
- * @param schema - Any supported schema (Zod, Valibot, ArkType)
+ * @param schema - Any supported schema (must support type inference)
  * @param data - Data to validate
  * @returns Typed validation result
  *
@@ -84,40 +136,78 @@ import { detectVendor } from './detection.js';
  * }
  * ```
  */
-export function validate<T>(
-  schema: AssertValidSchema<T>,
+export function validate<T extends InferCapable>(
+  schema: T,
   data: unknown
 ): ValidationResult<InferOutput<T>>;
 export function validate(
   schema: unknown,
   data: unknown
 ): ValidationResult<unknown> {
-  const vendor = detectVendor(schema);
+  // 1. AnySchema Protocol
+  if (isAnySchemaProtocol(schema)) {
+    return (schema as AnySchemaV1)['~validate'](data);
+  }
 
-  if (!vendor) {
+  // 2. Standard Schema
+  if (isStandardSchema(schema)) {
+    const result = (schema as { '~standard': { validate: (d: unknown) => unknown } })['~standard'].validate(data);
+    return normalizeStandardSchemaResult(result);
+  }
+
+  // 3. Duck typing
+  const detection = detect(schema);
+  if (!detection) {
     return {
       success: false,
       issues: [{ message: 'Unsupported schema type' }],
     };
   }
 
-  return validateByVendor(vendor, schema, data);
+  return validateByVendor(detection.vendor as SchemaVendor, schema, data);
+}
+
+/**
+ * Validate without type inference (escape hatch)
+ *
+ * Use this for schemas that don't support type inference (e.g., Joi).
+ */
+export function validateAny(
+  schema: unknown,
+  data: unknown
+): ValidationResult<unknown> {
+  return validate(schema as InferCapable, data);
 }
 
 /**
  * Async validation for any supported schema
  */
-export async function validateAsync<T>(
-  schema: AssertValidSchema<T>,
+export async function validateAsync<T extends InferCapable>(
+  schema: T,
   data: unknown
 ): Promise<ValidationResult<InferOutput<T>>>;
 export async function validateAsync(
   schema: unknown,
   data: unknown
 ): Promise<ValidationResult<unknown>> {
-  const vendor = detectVendor(schema);
+  // 1. AnySchema Protocol with async
+  if (isAnySchemaProtocol(schema)) {
+    const s = schema as AnySchemaV1;
+    if (s['~validateAsync']) {
+      return s['~validateAsync'](data);
+    }
+    return s['~validate'](data);
+  }
 
-  if (!vendor) {
+  // 2. Standard Schema
+  if (isStandardSchema(schema)) {
+    const result = await (schema as { '~standard': { validate: (d: unknown) => unknown } })['~standard'].validate(data);
+    return normalizeStandardSchemaResult(result);
+  }
+
+  // 3. Duck typing
+  const detection = detect(schema);
+  if (!detection) {
     return {
       success: false,
       issues: [{ message: 'Unsupported schema type' }],
@@ -125,11 +215,106 @@ export async function validateAsync(
   }
 
   // For Valibot async schemas, use safeParseAsync
-  if (vendor === 'valibot' && isAsyncSchema(schema)) {
+  if (detection.vendor === 'valibot' && isAsyncSchema(schema)) {
     return validateValibotAsync(schema, data);
   }
 
-  return validateByVendor(vendor, schema, data);
+  return validateByVendor(detection.vendor as SchemaVendor, schema, data);
+}
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard that narrows the type of data
+ *
+ * @param schema - Any supported schema
+ * @param data - Data to check
+ * @returns True if data matches schema, with type narrowing
+ *
+ * @example
+ * ```typescript
+ * if (is(userSchema, data)) {
+ *   data.name; // TypeScript knows data is User
+ * }
+ * ```
+ */
+export function is<T extends InferCapable>(
+  schema: T,
+  data: unknown
+): data is InferOutput<T> {
+  const result = validate(schema, data);
+  return result.success;
+}
+
+/**
+ * Assert that data matches schema, throws if not
+ *
+ * @param schema - Any supported schema
+ * @param data - Data to assert
+ * @throws ValidationError if data doesn't match
+ *
+ * @example
+ * ```typescript
+ * assert(userSchema, data);
+ * data.name; // TypeScript knows data is User
+ * ```
+ */
+export function assert<T extends InferCapable>(
+  schema: T,
+  data: unknown
+): asserts data is InferOutput<T> {
+  const result = validate(schema, data);
+  if (!result.success) {
+    throw new ValidationError(result.issues);
+  }
+}
+
+// ============================================================================
+// Parsing
+// ============================================================================
+
+/**
+ * Parse data, throwing on validation errors
+ *
+ * @param schema - Any supported schema
+ * @param data - Data to parse
+ * @returns Validated and typed data
+ * @throws ValidationError if validation fails
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const user = parse(userSchema, data);
+ * } catch (error) {
+ *   // ValidationError with issues
+ * }
+ * ```
+ */
+export function parse<T extends InferCapable>(
+  schema: T,
+  data: unknown
+): InferOutput<T> {
+  const result = validate(schema, data);
+  if (!result.success) {
+    throw new ValidationError(result.issues);
+  }
+  return result.data as InferOutput<T>;
+}
+
+/**
+ * Async version of parse
+ */
+export async function parseAsync<T extends InferCapable>(
+  schema: T,
+  data: unknown
+): Promise<InferOutput<T>> {
+  const result = await validateAsync(schema, data);
+  if (!result.success) {
+    throw new ValidationError(result.issues);
+  }
+  return result.data as InferOutput<T>;
 }
 
 // ============================================================================
@@ -142,7 +327,7 @@ export async function validateAsync(
  * Automatically detects schema type and uses appropriate converter.
  * Converters are dynamically imported for tree-shaking.
  *
- * @param schema - Any supported schema
+ * @param schema - Any supported schema with JSON Schema capability
  * @returns Promise resolving to JSON Schema
  *
  * @example
@@ -150,19 +335,29 @@ export async function validateAsync(
  * const jsonSchema = await toJsonSchema(z.object({ name: z.string() }));
  * ```
  */
-export async function toJsonSchema<T>(
-  schema: AssertValidSchema<T>
+export async function toJsonSchema<T extends JsonSchemaCapable>(
+  schema: T
 ): Promise<JSONSchema>;
 export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
-  const vendor = detectVendor(schema);
+  // 1. AnySchema Protocol with toJsonSchema
+  if (
+    typeof schema === 'object' &&
+    schema !== null &&
+    '~toJsonSchema' in schema &&
+    typeof (schema as Record<string, unknown>)['~toJsonSchema'] === 'function'
+  ) {
+    return (schema as { '~toJsonSchema': () => JSONSchema })['~toJsonSchema']();
+  }
 
-  if (!vendor) {
+  // 2. Duck typing
+  const detection = detect(schema);
+  if (!detection) {
     throw new Error(
-      'Unsupported schema type. Expected Zod, Valibot, or ArkType schema.'
+      'Unsupported schema type. Expected a schema with JSON Schema support.'
     );
   }
 
-  return toJsonSchemaByVendor(vendor, schema);
+  return toJsonSchemaByVendor(detection.vendor as SchemaVendor, schema);
 }
 
 /**
@@ -170,17 +365,144 @@ export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
  *
  * Note: Uses require() for converters. May not work in all environments.
  */
-export function toJsonSchemaSync<T>(schema: AssertValidSchema<T>): JSONSchema;
+export function toJsonSchemaSync<T extends JsonSchemaCapable>(
+  schema: T
+): JSONSchema;
 export function toJsonSchemaSync(schema: unknown): JSONSchema {
-  const vendor = detectVendor(schema);
+  // 1. AnySchema Protocol with toJsonSchema
+  if (
+    typeof schema === 'object' &&
+    schema !== null &&
+    '~toJsonSchema' in schema &&
+    typeof (schema as Record<string, unknown>)['~toJsonSchema'] === 'function'
+  ) {
+    return (schema as { '~toJsonSchema': () => JSONSchema })['~toJsonSchema']();
+  }
 
-  if (!vendor) {
+  // 2. Duck typing
+  const detection = detect(schema);
+  if (!detection) {
     throw new Error(
-      'Unsupported schema type. Expected Zod, Valibot, or ArkType schema.'
+      'Unsupported schema type. Expected a schema with JSON Schema support.'
     );
   }
 
-  return toJsonSchemaSyncByVendor(vendor, schema);
+  return toJsonSchemaSyncByVendor(detection.vendor as SchemaVendor, schema);
+}
+
+// ============================================================================
+// Metadata
+// ============================================================================
+
+/**
+ * Extract metadata from a schema
+ *
+ * @param schema - Any supported schema with metadata capability
+ * @returns Schema metadata
+ *
+ * @example
+ * ```typescript
+ * const meta = getMetadata(schema);
+ * // { title?, description?, examples?, default?, deprecated? }
+ * ```
+ */
+export function getMetadata<T extends MetadataCapable>(
+  schema: T
+): SchemaMetadata {
+  // 1. AnySchema Protocol
+  if (typeof schema === 'object' && schema !== null && '~meta' in schema) {
+    return (schema as { '~meta': SchemaMetadata })['~meta'] ?? {};
+  }
+
+  const detection = detect(schema);
+  if (!detection) {
+    return {};
+  }
+
+  return getMetadataByVendor(detection.vendor as SchemaVendor, schema);
+}
+
+// ============================================================================
+// Schema Creation (Protocol)
+// ============================================================================
+
+/**
+ * Options for creating an AnySchema Protocol schema
+ */
+export interface CreateSchemaOptions<Output, Input = Output> {
+  /** Vendor name (your library name) */
+  vendor: string;
+  /** Core validation function */
+  validate: (data: unknown) => ValidationResult<Output>;
+  /** Optional async validation */
+  validateAsync?: (data: unknown) => Promise<ValidationResult<Output>>;
+  /** Optional JSON Schema conversion */
+  toJsonSchema?: () => JSONSchema;
+  /** Optional coercion function */
+  coerce?: (data: unknown) => unknown;
+  /** Optional metadata */
+  meta?: SchemaMetadata;
+  /** Type carriers (for inference) - not used at runtime */
+  types?: { input: Input; output: Output };
+}
+
+/**
+ * Create an AnySchema Protocol compliant schema
+ *
+ * @param options - Schema configuration
+ * @returns AnySchema Protocol v1 compliant schema
+ *
+ * @example
+ * ```typescript
+ * const myStringSchema = createSchema<string>({
+ *   vendor: 'my-library',
+ *   validate: (data) => {
+ *     if (typeof data === 'string') {
+ *       return { success: true, data };
+ *     }
+ *     return { success: false, issues: [{ message: 'Expected string' }] };
+ *   },
+ *   toJsonSchema: () => ({ type: 'string' }),
+ * });
+ *
+ * // Now works with all AnySchema functions
+ * validate(myStringSchema, 'hello');  // ✓
+ * toJsonSchema(myStringSchema);       // ✓
+ * type Output = InferOutput<typeof myStringSchema>; // string
+ * ```
+ */
+export function createSchema<Output, Input = Output>(
+  options: CreateSchemaOptions<Output, Input>
+): AnySchemaV1<Output, Input> {
+  const schema: AnySchemaV1<Output, Input> = {
+    '~anyschema': {
+      version: 1,
+      vendor: options.vendor,
+    },
+    '~types': {
+      input: null as unknown as Input,
+      output: null as unknown as Output,
+    },
+    '~validate': options.validate,
+  };
+
+  if (options.validateAsync) {
+    (schema as unknown as Record<string, unknown>)['~validateAsync'] = options.validateAsync;
+  }
+
+  if (options.toJsonSchema) {
+    (schema as unknown as Record<string, unknown>)['~toJsonSchema'] = options.toJsonSchema;
+  }
+
+  if (options.coerce) {
+    (schema as unknown as Record<string, unknown>)['~coerce'] = options.coerce;
+  }
+
+  if (options.meta) {
+    (schema as unknown as Record<string, unknown>)['~meta'] = options.meta;
+  }
+
+  return schema;
 }
 
 // ============================================================================
@@ -204,12 +526,40 @@ function isAsyncSchema(schema: unknown): boolean {
  */
 function hasMethod(obj: unknown, method: string): boolean {
   if (obj === null || obj === undefined) return false;
-  // Check both objects and functions (ArkType schemas are functions)
   if (typeof obj !== 'object' && typeof obj !== 'function') return false;
   return (
     method in obj &&
     typeof (obj as Record<string, unknown>)[method] === 'function'
   );
+}
+
+/**
+ * Normalize Standard Schema result to ValidationResult
+ */
+function normalizeStandardSchemaResult(result: unknown): ValidationResult<unknown> {
+  const r = result as { value?: unknown; issues?: readonly { message: string; path?: readonly unknown[] }[] };
+
+  if (r.issues && r.issues.length > 0) {
+    return {
+      success: false,
+      issues: r.issues.map((issue) => {
+        const base: { message: string; path?: (string | number)[] } = {
+          message: issue.message,
+        };
+        if (issue.path && issue.path.length > 0) {
+          base.path = issue.path.map((p) => {
+            if (typeof p === 'object' && p !== null && 'key' in p) {
+              return (p as { key: PropertyKey }).key as string | number;
+            }
+            return p as string | number;
+          });
+        }
+        return base;
+      }),
+    };
+  }
+
+  return { success: true, data: r.value };
 }
 
 /**
@@ -227,6 +577,22 @@ function validateByVendor(
       return validateValibot(schema, data);
     case 'arktype':
       return validateArkType(schema, data);
+    case 'yup':
+      return validateYup(schema, data);
+    case 'joi':
+      return validateJoi(schema, data);
+    case 'io-ts':
+      return validateIoTs(schema, data);
+    case 'superstruct':
+      return validateSuperstruct(schema, data);
+    case 'typebox':
+      return validateTypeBox(schema, data);
+    case 'effect':
+      return validateEffect(schema, data);
+    case 'runtypes':
+      return validateRuntypes(schema, data);
+    default:
+      return { success: false, issues: [{ message: `Unsupported vendor: ${vendor}` }] };
   }
 }
 
@@ -261,7 +627,6 @@ function validateZod(schema: unknown, data: unknown): ValidationResult<unknown> 
  * Valibot validation - pure duck typing
  */
 function validateValibot(schema: unknown, data: unknown): ValidationResult<unknown> {
-  // Try to dynamically require valibot
   let safeParse: (s: unknown, d: unknown) => unknown;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -366,6 +731,191 @@ function validateArkType(schema: unknown, data: unknown): ValidationResult<unkno
 }
 
 /**
+ * Yup validation - pure duck typing
+ */
+function validateYup(schema: unknown, data: unknown): ValidationResult<unknown> {
+  if (!hasMethod(schema, 'validateSync')) {
+    return { success: false, issues: [{ message: 'Invalid Yup schema' }] };
+  }
+
+  try {
+    const result = (schema as { validateSync: (d: unknown) => unknown }).validateSync(data);
+    return { success: true, data: result };
+  } catch (error) {
+    const yupError = error as { errors?: string[]; path?: string };
+    return {
+      success: false,
+      issues: (yupError.errors ?? ['Validation failed']).map((msg) => {
+        const base: { message: string; path?: (string | number)[] } = { message: msg };
+        if (yupError.path) {
+          base.path = [yupError.path];
+        }
+        return base;
+      }),
+    };
+  }
+}
+
+/**
+ * Joi validation - pure duck typing
+ */
+function validateJoi(schema: unknown, data: unknown): ValidationResult<unknown> {
+  if (!hasMethod(schema, 'validate')) {
+    return { success: false, issues: [{ message: 'Invalid Joi schema' }] };
+  }
+
+  const result = (schema as { validate: (d: unknown) => { error?: unknown; value: unknown } }).validate(data);
+
+  if (result.error) {
+    const joiError = result.error as { details?: Array<{ message: string; path: (string | number)[] }> };
+    return {
+      success: false,
+      issues: (joiError.details ?? []).map((detail) => ({
+        message: detail.message,
+        path: detail.path,
+      })),
+    };
+  }
+
+  return { success: true, data: result.value };
+}
+
+/**
+ * io-ts validation - pure duck typing
+ */
+function validateIoTs(schema: unknown, data: unknown): ValidationResult<unknown> {
+  if (!hasMethod(schema, 'decode')) {
+    return { success: false, issues: [{ message: 'Invalid io-ts schema' }] };
+  }
+
+  const result = (schema as { decode: (d: unknown) => unknown }).decode(data);
+
+  // io-ts returns Either<Errors, A>
+  const either = result as { _tag: string; left?: unknown; right?: unknown };
+
+  if (either._tag === 'Right') {
+    return { success: true, data: either.right };
+  }
+
+  // Handle Left (errors)
+  const errors = either.left as Array<{ message?: string; context?: Array<{ key: string }> }> | undefined;
+  return {
+    success: false,
+    issues: (errors ?? []).map((e) => {
+      const base: { message: string; path?: (string | number)[] } = {
+        message: e.message ?? 'Validation failed',
+      };
+      if (e.context && e.context.length > 0) {
+        base.path = e.context.map((c) => c.key);
+      }
+      return base;
+    }),
+  };
+}
+
+/**
+ * Superstruct validation - pure duck typing
+ */
+function validateSuperstruct(schema: unknown, data: unknown): ValidationResult<unknown> {
+  let validate: (d: unknown, s: unknown) => [unknown, unknown];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const ss = require('superstruct') as { validate: typeof validate };
+    validate = ss.validate;
+  } catch {
+    return { success: false, issues: [{ message: 'superstruct not installed' }] };
+  }
+
+  const [error, value] = validate(data, schema);
+
+  if (error) {
+    const ssError = error as { failures?: () => Array<{ message: string; path: (string | number)[] }> };
+    const failures = ssError.failures?.() ?? [];
+    return {
+      success: false,
+      issues: failures.map((f) => ({
+        message: f.message,
+        path: f.path,
+      })),
+    };
+  }
+
+  return { success: true, data: value };
+}
+
+/**
+ * TypeBox validation - pure duck typing
+ */
+function validateTypeBox(schema: unknown, data: unknown): ValidationResult<unknown> {
+  let Value: { Check: (s: unknown, d: unknown) => boolean; Errors: (s: unknown, d: unknown) => Iterable<{ message: string; path: string }> };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const tb = require('@sinclair/typebox/value') as { Value: typeof Value };
+    Value = tb.Value;
+  } catch {
+    return { success: false, issues: [{ message: '@sinclair/typebox not installed' }] };
+  }
+
+  if (Value.Check(schema, data)) {
+    return { success: true, data };
+  }
+
+  const errors = [...Value.Errors(schema, data)];
+  return {
+    success: false,
+    issues: errors.map((e) => ({
+      message: e.message,
+      path: e.path.split('/').filter(Boolean) as (string | number)[],
+    })),
+  };
+}
+
+/**
+ * Effect Schema validation - pure duck typing
+ */
+function validateEffect(schema: unknown, data: unknown): ValidationResult<unknown> {
+  let decodeUnknownSync: (s: unknown) => (d: unknown) => unknown;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const S = require('@effect/schema/Schema') as { decodeUnknownSync: typeof decodeUnknownSync };
+    decodeUnknownSync = S.decodeUnknownSync;
+  } catch {
+    return { success: false, issues: [{ message: '@effect/schema not installed' }] };
+  }
+
+  try {
+    const result = decodeUnknownSync(schema)(data);
+    return { success: true, data: result };
+  } catch (error) {
+    const effectError = error as { message?: string; errors?: Array<{ message: string }> };
+    return {
+      success: false,
+      issues: effectError.errors?.map((e) => ({ message: e.message })) ?? [{ message: effectError.message ?? 'Validation failed' }],
+    };
+  }
+}
+
+/**
+ * Runtypes validation - pure duck typing
+ */
+function validateRuntypes(schema: unknown, data: unknown): ValidationResult<unknown> {
+  if (!hasMethod(schema, 'check')) {
+    return { success: false, issues: [{ message: 'Invalid Runtypes schema' }] };
+  }
+
+  try {
+    const result = (schema as { check: (d: unknown) => unknown }).check(data);
+    return { success: true, data: result };
+  } catch (error) {
+    const rtError = error as { message?: string };
+    return {
+      success: false,
+      issues: [{ message: rtError.message ?? 'Validation failed' }],
+    };
+  }
+}
+
+/**
  * Convert to JSON Schema by vendor (async)
  */
 async function toJsonSchemaByVendor(
@@ -399,6 +949,27 @@ async function toJsonSchemaByVendor(
       }
       throw new Error('ArkType schema does not have toJsonSchema method');
     }
+    case 'typebox': {
+      // TypeBox schemas ARE JSON Schema
+      return schema as JSONSchema;
+    }
+    case 'effect': {
+      try {
+        // Dynamic require to avoid type errors when @effect/schema is not installed
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const effectSchema = require('@effect/schema') as { JSONSchema?: { make: (s: unknown) => unknown } };
+        if (!effectSchema.JSONSchema) {
+          throw new Error('@effect/schema not installed');
+        }
+        return effectSchema.JSONSchema.make(schema) as unknown as JSONSchema;
+      } catch {
+        throw new Error(
+          '@effect/schema not installed. Run: npm install @effect/schema'
+        );
+      }
+    }
+    default:
+      throw new Error(`JSON Schema conversion not supported for ${vendor}`);
   }
 }
 
@@ -439,5 +1010,63 @@ function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSc
       }
       throw new Error('ArkType schema does not have toJsonSchema method');
     }
+    case 'typebox': {
+      // TypeBox schemas ARE JSON Schema
+      return schema as JSONSchema;
+    }
+    case 'effect': {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { JSONSchema } = require('@effect/schema') as {
+          JSONSchema: { make: (s: unknown) => unknown };
+        };
+        return JSONSchema.make(schema) as JSONSchema;
+      } catch {
+        throw new Error(
+          '@effect/schema not installed. Run: npm install @effect/schema'
+        );
+      }
+    }
+    default:
+      throw new Error(`JSON Schema conversion not supported for ${vendor}`);
+  }
+}
+
+/**
+ * Get metadata by vendor
+ */
+function getMetadataByVendor(vendor: SchemaVendor, schema: unknown): SchemaMetadata {
+  switch (vendor) {
+    case 'zod': {
+      const def = (schema as { _def?: { description?: string } })._def;
+      return def?.description ? { description: def.description } : {};
+    }
+    case 'yup': {
+      const spec = (schema as { spec?: { meta?: SchemaMetadata } }).spec;
+      return spec?.meta ?? {};
+    }
+    case 'typebox': {
+      const tb = schema as { title?: string; description?: string; default?: unknown; examples?: unknown[]; deprecated?: boolean };
+      const result: { title?: string; description?: string; default?: unknown; examples?: readonly unknown[]; deprecated?: boolean } = {};
+      if (tb.title !== undefined) result.title = tb.title;
+      if (tb.description !== undefined) result.description = tb.description;
+      if (tb.default !== undefined) result.default = tb.default;
+      if (tb.examples !== undefined) result.examples = tb.examples;
+      if (tb.deprecated !== undefined) result.deprecated = tb.deprecated;
+      return result;
+    }
+    case 'effect': {
+      const annotations = (schema as { annotations?: Record<string, unknown> }).annotations;
+      const result: { title?: string; description?: string } = {};
+      if (annotations) {
+        const title = annotations['title'];
+        const description = annotations['description'];
+        if (typeof title === 'string') result.title = title;
+        if (typeof description === 'string') result.description = description;
+      }
+      return result;
+    }
+    default:
+      return {};
   }
 }
