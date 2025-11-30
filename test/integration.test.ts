@@ -6,6 +6,8 @@ import { type } from 'arktype';
 import {
   toJsonSchema,
   toJsonSchemaSync,
+  validate,
+  validateAsync,
   detectVendor,
   isZodSchema,
   isValibotSchema,
@@ -13,11 +15,11 @@ import {
 } from '../src/index.js';
 
 // Subpath imports
-import { toJsonSchema as zodToJsonSchema } from '../src/zod.js';
-import { toJsonSchema as valibotToJsonSchema } from '../src/valibot.js';
-import { toJsonSchema as arktypeToJsonSchema } from '../src/arktype.js';
+import { toJsonSchema as zodToJsonSchema, validate as zodValidate } from '../src/zod.js';
+import { toJsonSchema as valibotToJsonSchema, validate as valibotValidate } from '../src/valibot.js';
+import { toJsonSchema as arktypeToJsonSchema, validate as arktypeValidate } from '../src/arktype.js';
 
-describe('Auto-detect toJsonSchema (async)', () => {
+describe('toJsonSchema (async)', () => {
   it('should convert Zod schema', async () => {
     const schema = z.object({ name: z.string(), age: z.number() });
     const result = await toJsonSchema(schema);
@@ -53,7 +55,7 @@ describe('Auto-detect toJsonSchema (async)', () => {
   });
 });
 
-describe('Auto-detect toJsonSchemaSync', () => {
+describe('toJsonSchemaSync', () => {
   it('should convert Zod schema', () => {
     const schema = z.string();
     const result = toJsonSchemaSync(schema);
@@ -79,8 +81,108 @@ describe('Auto-detect toJsonSchemaSync', () => {
   });
 });
 
+describe('validate', () => {
+  describe('Zod', () => {
+    it('should validate valid data', () => {
+      const schema = z.object({ name: z.string() });
+      const result = validate(schema, { name: 'John' });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual({ name: 'John' });
+      }
+    });
+
+    it('should return issues for invalid data', () => {
+      const schema = z.object({ name: z.string() });
+      const result = validate(schema, { name: 123 });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.issues.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('Valibot', () => {
+    it('should validate valid data', () => {
+      const schema = v.object({ name: v.string() });
+      const result = validate(schema, { name: 'John' });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual({ name: 'John' });
+      }
+    });
+
+    it('should return issues for invalid data', () => {
+      const schema = v.object({ name: v.string() });
+      const result = validate(schema, { name: 123 });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.issues.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe('ArkType', () => {
+    it('should validate valid data', () => {
+      const schema = type({ name: 'string' });
+      const result = validate(schema, { name: 'John' });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data).toEqual({ name: 'John' });
+      }
+    });
+
+    it('should return issues for invalid data', () => {
+      const schema = type({ name: 'string' });
+      const result = validate(schema, { name: 123 });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.issues.length).toBeGreaterThan(0);
+      }
+    });
+  });
+});
+
+describe('validateAsync', () => {
+  it('should validate Zod schema', async () => {
+    const schema = z.string();
+    const result = await validateAsync(schema, 'hello');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe('hello');
+    }
+  });
+
+  it('should validate Valibot schema', async () => {
+    const schema = v.string();
+    const result = await validateAsync(schema, 'hello');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe('hello');
+    }
+  });
+
+  it('should validate ArkType schema', async () => {
+    const schema = type('string');
+    const result = await validateAsync(schema, 'hello');
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe('hello');
+    }
+  });
+});
+
 describe('Subpath exports', () => {
-  describe('standard-schema-to-json/zod', () => {
+  describe('anyschema/zod', () => {
     it('should convert Zod schema', () => {
       const schema = z.object({ name: z.string() });
       const result = zodToJsonSchema(schema);
@@ -88,9 +190,16 @@ describe('Subpath exports', () => {
       expect(result.type).toBe('object');
       expect(result.properties).toHaveProperty('name');
     });
+
+    it('should validate with Zod', () => {
+      const schema = z.object({ name: z.string() });
+      const result = zodValidate(schema, { name: 'John' });
+
+      expect(result.success).toBe(true);
+    });
   });
 
-  describe('standard-schema-to-json/valibot', () => {
+  describe('anyschema/valibot', () => {
     it('should convert Valibot schema', () => {
       const schema = v.object({ name: v.string() });
       const result = valibotToJsonSchema(schema);
@@ -98,15 +207,29 @@ describe('Subpath exports', () => {
       expect(result.type).toBe('object');
       expect(result.properties).toHaveProperty('name');
     });
+
+    it('should validate with Valibot', () => {
+      const schema = v.object({ name: v.string() });
+      const result = valibotValidate(schema, { name: 'John' });
+
+      expect(result.success).toBe(true);
+    });
   });
 
-  describe('standard-schema-to-json/arktype', () => {
+  describe('anyschema/arktype', () => {
     it('should convert ArkType schema', () => {
       const schema = type({ name: 'string' });
       const result = arktypeToJsonSchema(schema);
 
       expect(result.type).toBe('object');
       expect(result.properties).toHaveProperty('name');
+    });
+
+    it('should validate with ArkType', () => {
+      const schema = type({ name: 'string' });
+      const result = arktypeValidate(schema, { name: 'John' });
+
+      expect(result.success).toBe(true);
     });
   });
 });

@@ -1,22 +1,20 @@
 /**
- * Valibot to JSON Schema converter
+ * Valibot utilities for AnySchema
  *
  * @example
  * ```typescript
  * import * as v from 'valibot';
- * import { toJsonSchema } from 'standard-schema-to-json/valibot';
+ * import { toJsonSchema, validate } from 'anyschema/valibot';
  *
  * const schema = v.object({ name: v.string() });
  * const jsonSchema = toJsonSchema(schema);
+ * const result = validate(schema, { name: 'John' });
  * ```
  */
 
 // Type-only import - erased at runtime, zero cost
-import type {
-  GenericSchema,
-  GenericSchemaAsync,
-} from 'valibot';
-import type { JSONSchema } from './types.js';
+import type { GenericSchema, GenericSchemaAsync } from 'valibot';
+import type { JSONSchema, ValidationResult, ValidationIssue } from './types.js';
 
 export type { JSONSchema };
 
@@ -28,10 +26,9 @@ type ValibotSchema = GenericSchema | GenericSchemaAsync;
  * Requires `@valibot/to-json-schema` as peer dependency
  */
 export function toJsonSchema(schema: ValibotSchema): JSONSchema {
-  // Blind call - assumes @valibot/to-json-schema is installed
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const mod = require('@valibot/to-json-schema') as {
-    toJsonSchema: (schema: ValibotSchema) => JSONSchema;
+    toJsonSchema: (schema: unknown) => JSONSchema;
   };
   return mod.toJsonSchema(schema);
 }
@@ -39,7 +36,7 @@ export function toJsonSchema(schema: ValibotSchema): JSONSchema {
 /**
  * Convert Valibot schema to JSON Schema (async version)
  *
- * Uses dynamic import for better tree-shaking in some bundlers
+ * Uses dynamic import for better tree-shaking
  */
 export async function toJsonSchemaAsync(
   schema: ValibotSchema
@@ -48,4 +45,62 @@ export async function toJsonSchemaAsync(
     toJsonSchema: (s: unknown) => JSONSchema;
   };
   return mod.toJsonSchema(schema);
+}
+
+/**
+ * Validate data against a Valibot schema (sync)
+ */
+export function validate<I, O>(
+  schema: GenericSchema<I, O>,
+  data: unknown
+): ValidationResult<O> {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const v = require('valibot') as {
+    safeParse: (
+      schema: unknown,
+      data: unknown
+    ) => ValibotResult<O>;
+  };
+
+  const result = v.safeParse(schema, data);
+  return normalizeResult(result);
+}
+
+/**
+ * Validate data against a Valibot schema (async)
+ */
+export async function validateAsync<I, O>(
+  schema: GenericSchema<I, O> | GenericSchemaAsync<I, O>,
+  data: unknown
+): Promise<ValidationResult<O>> {
+  const v = (await import('valibot')) as {
+    safeParseAsync: (
+      schema: unknown,
+      data: unknown
+    ) => Promise<ValibotResult<O>>;
+  };
+
+  const result = await v.safeParseAsync(schema, data);
+  return normalizeResult(result);
+}
+
+// Internal types
+type ValibotResult<O> =
+  | { success: true; output: O }
+  | { success: false; issues: Array<{ message: string; path?: Array<{ key: string | number }> }> };
+
+function normalizeResult<O>(result: ValibotResult<O>): ValidationResult<O> {
+  if (result.success) {
+    return { success: true, data: result.output };
+  }
+
+  const issues: ValidationIssue[] = result.issues.map((issue) => {
+    const base: ValidationIssue = { message: issue.message };
+    if (issue.path) {
+      base.path = issue.path.map((p) => p.key);
+    }
+    return base;
+  });
+
+  return { success: false, issues };
 }
