@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 (2025-11-30)
+
+### 🐛 Bug Fixes
+
+- use Zod 4 native toJSONSchema() with fallback to zod-to-json-schema for Zod 3 ([4c2c293](https://github.com/SylphxAI/anyschema/commit/4c2c2939b51fe085b471e16a600ed23a0bc05b05))
+
 ## 0.1.2 (2025-11-30)
 
 ### 🐛 Bug Fixes
