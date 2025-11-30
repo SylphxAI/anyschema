@@ -2,9 +2,11 @@
  * Comprehensive Zod Integration Tests
  *
  * Tests all Zod schema types and features with AnySchema.
+ * Includes both Zod v3 (via 'zod') and Zod v4 (via 'zod/v4') tests.
  */
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { toJSONSchema as zodV4ToJSONSchema, z as zv4 } from 'zod/v4'
 import {
 	assert,
 	detect,
@@ -866,6 +868,175 @@ describe('Zod with is(), parse(), assert()', () => {
 
 		it('should throw ValidationError', () => {
 			expect(() => assert(userSchema, { name: 'John' })).toThrow(ValidationError)
+		})
+	})
+})
+
+// ============================================================================
+// Zod v4 Native (zod/v4) Tests
+// ============================================================================
+
+describe('Zod v4 Native (zod/v4)', () => {
+	describe('Detection', () => {
+		it('should detect Zod v4 schemas by _zod property', () => {
+			const schema = zv4.string()
+			expect('_zod' in schema).toBe(true)
+			expect(detectVendor(schema)).toBe('zod')
+		})
+
+		it('should detect Zod v4 objects', () => {
+			const schema = zv4.object({ name: zv4.string() })
+			expect(detectVendor(schema)).toBe('zod')
+		})
+
+		it('should return correct detection for v4 schemas', () => {
+			const result = detect(zv4.string())
+			// Zod v4 implements Standard Schema, so it may return 'standard-schema' or 'duck'
+			expect(['standard-schema', 'duck']).toContain(result?.type)
+			expect(result?.vendor).toBe('zod')
+		})
+	})
+
+	describe('Validation', () => {
+		it('should validate Zod v4 string schema', () => {
+			const schema = zv4.string()
+			expect(validate(schema, 'hello').success).toBe(true)
+			expect(validate(schema, 123).success).toBe(false)
+		})
+
+		it('should validate Zod v4 number schema', () => {
+			const schema = zv4.number()
+			expect(validate(schema, 42).success).toBe(true)
+			expect(validate(schema, 'not a number').success).toBe(false)
+		})
+
+		it('should validate Zod v4 object schema', () => {
+			const schema = zv4.object({
+				name: zv4.string(),
+				age: zv4.number(),
+			})
+			expect(validate(schema, { name: 'John', age: 30 }).success).toBe(true)
+			expect(validate(schema, { name: 'John' }).success).toBe(false)
+		})
+
+		it('should validate Zod v4 array schema', () => {
+			const schema = zv4.array(zv4.string())
+			expect(validate(schema, ['a', 'b', 'c']).success).toBe(true)
+			expect(validate(schema, [1, 2, 3]).success).toBe(false)
+		})
+
+		it('should validate Zod v4 optional schema', () => {
+			const schema = zv4.object({
+				name: zv4.string(),
+				age: zv4.number().optional(),
+			})
+			expect(validate(schema, { name: 'John' }).success).toBe(true)
+			expect(validate(schema, { name: 'John', age: 30 }).success).toBe(true)
+		})
+
+		it('should validate Zod v4 enum schema', () => {
+			const schema = zv4.enum(['red', 'green', 'blue'])
+			expect(validate(schema, 'red').success).toBe(true)
+			expect(validate(schema, 'yellow').success).toBe(false)
+		})
+
+		it('should validate Zod v4 union schema', () => {
+			const schema = zv4.union([zv4.string(), zv4.number()])
+			expect(validate(schema, 'hello').success).toBe(true)
+			expect(validate(schema, 42).success).toBe(true)
+			expect(validate(schema, true).success).toBe(false)
+		})
+	})
+
+	describe('JSON Schema Conversion', () => {
+		it('should convert Zod v4 string schema to JSON Schema', async () => {
+			const schema = zv4.string()
+			const jsonSchema = await toJsonSchema(schema)
+			expect(jsonSchema.type).toBe('string')
+		})
+
+		it('should convert Zod v4 number schema to JSON Schema', async () => {
+			const schema = zv4.number()
+			const jsonSchema = await toJsonSchema(schema)
+			expect(jsonSchema.type).toBe('number')
+		})
+
+		it('should convert Zod v4 object schema to JSON Schema', async () => {
+			const schema = zv4.object({
+				name: zv4.string(),
+				age: zv4.number(),
+			})
+			const jsonSchema = await toJsonSchema(schema)
+			expect(jsonSchema.type).toBe('object')
+			expect(jsonSchema.properties).toHaveProperty('name')
+			expect(jsonSchema.properties).toHaveProperty('age')
+			expect(jsonSchema.required).toContain('name')
+			expect(jsonSchema.required).toContain('age')
+		})
+
+		it('should convert Zod v4 array schema to JSON Schema', async () => {
+			const schema = zv4.array(zv4.string())
+			const jsonSchema = await toJsonSchema(schema)
+			expect(jsonSchema.type).toBe('array')
+			expect((jsonSchema.items as any).type).toBe('string')
+		})
+
+		it('should convert Zod v4 enum schema to JSON Schema', async () => {
+			const schema = zv4.enum(['a', 'b', 'c'])
+			const jsonSchema = await toJsonSchema(schema)
+			expect(jsonSchema.enum).toEqual(['a', 'b', 'c'])
+		})
+
+		it('should convert Zod v4 schema synchronously', () => {
+			const schema = zv4.object({ name: zv4.string() })
+			const jsonSchema = toJsonSchemaSync(schema)
+			expect(jsonSchema.type).toBe('object')
+			expect(jsonSchema.properties).toHaveProperty('name')
+		})
+
+		it('should match native zod/v4 toJSONSchema output', async () => {
+			const schema = zv4.object({
+				name: zv4.string(),
+				age: zv4.number(),
+				email: zv4.string().optional(),
+			})
+
+			const anySchemaResult = await toJsonSchema(schema)
+			const nativeResult = zodV4ToJSONSchema(schema)
+
+			// Both should have same structure
+			expect(anySchemaResult.type).toBe(nativeResult.type)
+			expect(anySchemaResult.properties).toEqual(nativeResult.properties)
+			expect(anySchemaResult.required).toEqual(nativeResult.required)
+		})
+	})
+
+	describe('Type Guards', () => {
+		it('should work with is() for Zod v4 schemas', () => {
+			const schema = zv4.object({ name: zv4.string() })
+			const data: unknown = { name: 'John' }
+			expect(is(schema, data)).toBe(true)
+			expect(is(schema, { name: 123 })).toBe(false)
+		})
+
+		it('should work with parse() for Zod v4 schemas', () => {
+			const schema = zv4.object({ name: zv4.string() })
+			const data = parse(schema, { name: 'John' })
+			expect(data.name).toBe('John')
+		})
+
+		it('should throw ValidationError for invalid Zod v4 data', () => {
+			const schema = zv4.object({ name: zv4.string() })
+			expect(() => parse(schema, { name: 123 })).toThrow(ValidationError)
+		})
+	})
+
+	describe('isZodSchema', () => {
+		it('should detect Zod v4 schemas', () => {
+			expect(isZodSchema(zv4.string())).toBe(true)
+			expect(isZodSchema(zv4.number())).toBe(true)
+			expect(isZodSchema(zv4.object({}))).toBe(true)
+			expect(isZodSchema(zv4.array(zv4.string()))).toBe(true)
 		})
 	})
 })

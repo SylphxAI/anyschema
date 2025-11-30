@@ -51,7 +51,12 @@ export function detect(schema: unknown): DetectionResult | null {
 
 	if (typeof schema !== 'object') return null
 
-	// Zod: has _def property and parse/safeParse methods
+	// Zod v4: has _zod property
+	if ('_zod' in schema) {
+		return { type: 'duck', vendor: 'zod' }
+	}
+
+	// Zod v3: has _def property and parse/safeParse methods
 	if (
 		'_def' in schema &&
 		'parse' in schema &&
