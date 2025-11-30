@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 (2025-11-30)
+
+### 🐛 Bug Fixes
+
+- **zod:** use static z.toJSONSchema() from zod/v4 instead of instance method ([39327a2](https://github.com/SylphxAI/anyschema/commit/39327a214871a5b4f208deed65d8aac87d1bf048))
+
 ## 0.1.3 (2025-11-30)
 
 ### 🐛 Bug Fixes
