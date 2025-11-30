@@ -548,3 +548,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md).
 ## License
 
 MIT © AnySchema Contributors
+
+## Powered by Sylphx
+
+Built with [@sylphx/doctor](https://github.com/SylphxAI/doctor) for project health checks and standards enforcement.

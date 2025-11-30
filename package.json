@@ -1,66 +1,76 @@
 {
-  "name": "anyschema",
-  "version": "0.3.0",
-  "description": "Universal schema utilities for TypeScript. Zero dependencies. Works with Zod, Valibot, ArkType, Yup, Joi, io-ts, and more.",
-  "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      },
-      "require": {
-        "types": "./dist/index.d.cts",
-        "default": "./dist/index.cjs"
-      }
-    }
-  },
-  "files": [
-    "dist"
-  ],
-  "scripts": {
-    "build": "tsup",
-    "dev": "tsup --watch",
-    "test": "vitest",
-    "test:run": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
-  },
-  "keywords": [
-    "schema",
-    "anyschema",
-    "universal",
-    "standard-schema",
-    "zod",
-    "valibot",
-    "arktype",
-    "yup",
-    "joi",
-    "io-ts",
-    "superstruct",
-    "typebox",
-    "effect-schema",
-    "runtypes",
-    "json-schema",
-    "validation",
-    "type-inference",
-    "typescript",
-    "zero-dependency"
-  ],
-  "author": "",
-  "license": "MIT",
-  "devDependencies": {
-    "@types/node": "^22.15.32",
-    "@valibot/to-json-schema": "^1.0.0",
-    "arktype": "^2.1.20",
-    "tsup": "^8.5.0",
-    "typescript": "^5.8.3",
-    "valibot": "^1.1.0",
-    "vitest": "^3.2.4",
-    "zod": "^3.25.67",
-    "zod-to-json-schema": "^3.24.5"
-  }
+	"name": "anyschema",
+	"version": "0.3.0",
+	"description": "Universal schema utilities for TypeScript. Zero dependencies. Works with Zod, Valibot, ArkType, Yup, Joi, io-ts, and more.",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/index.d.ts",
+				"default": "./dist/index.js"
+			},
+			"require": {
+				"types": "./dist/index.d.cts",
+				"default": "./dist/index.cjs"
+			}
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/SylphxAI/anyschema.git"
+	},
+	"scripts": {
+		"build": "bunup",
+		"dev": "bunup --watch",
+		"test": "bun test",
+		"typecheck": "tsc --noEmit",
+		"prepublishOnly": "bunx @sylphx/doctor prepublish && bun run build",
+		"lint": "biome check .",
+		"format": "biome format --write ."
+	},
+	"keywords": [
+		"schema",
+		"anyschema",
+		"universal",
+		"standard-schema",
+		"zod",
+		"valibot",
+		"arktype",
+		"yup",
+		"joi",
+		"io-ts",
+		"superstruct",
+		"typebox",
+		"effect-schema",
+		"runtypes",
+		"json-schema",
+		"validation",
+		"type-inference",
+		"typescript",
+		"zero-dependency"
+	],
+	"author": "",
+	"license": "MIT",
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.8",
+		"@sylphx/biome-config": "^0.4.0",
+		"@sylphx/bump": "^1.4.5",
+		"@sylphx/doctor": "^1.25.0",
+		"@sylphx/tsconfig": "^0.3.0",
+		"@types/node": "^22.15.32",
+		"@valibot/to-json-schema": "^1.0.0",
+		"arktype": "^2.1.20",
+		"bunup": "^0.16.10",
+		"lefthook": "^2.0.4",
+		"typescript": "^5.8.3",
+		"valibot": "^1.1.0",
+		"zod": "^3.25.67",
+		"zod-to-json-schema": "^3.24.5"
+	}
 }

@@ -14,44 +14,44 @@
  * Schema metadata
  */
 export interface SchemaMetadata {
-  readonly title?: string;
-  readonly description?: string;
-  readonly examples?: readonly unknown[];
-  readonly default?: unknown;
-  readonly deprecated?: boolean;
+	readonly title?: string
+	readonly description?: string
+	readonly examples?: readonly unknown[]
+	readonly default?: unknown
+	readonly deprecated?: boolean
 }
 
 /**
  * Validation issue
  */
 export interface ValidationIssue {
-  readonly message: string;
-  readonly path?: readonly (string | number)[];
-  readonly code?: string;
+	readonly message: string
+	readonly path?: readonly (string | number)[]
+	readonly code?: string
 }
 
 /**
  * Validation result - success
  */
 export interface ValidationSuccess<T> {
-  readonly success: true;
-  readonly data: T;
-  readonly issues?: never;
+	readonly success: true
+	readonly data: T
+	readonly issues?: never
 }
 
 /**
  * Validation result - failure
  */
 export interface ValidationFailure {
-  readonly success: false;
-  readonly data?: never;
-  readonly issues: readonly ValidationIssue[];
+	readonly success: false
+	readonly data?: never
+	readonly issues: readonly ValidationIssue[]
 }
 
 /**
  * Unified validation result
  */
-export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
+export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure
 
 /**
  * AnySchema Protocol v1
@@ -70,32 +70,32 @@ export type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure;
  * ```
  */
 export interface AnySchemaV1<Output = unknown, Input = Output> {
-  /** Protocol identity marker */
-  readonly '~anyschema': {
-    readonly version: 1;
-    readonly vendor: string;
-  };
+	/** Protocol identity marker */
+	readonly '~anyschema': {
+		readonly version: 1
+		readonly vendor: string
+	}
 
-  /** Type carriers (compile-time only, never accessed at runtime) */
-  readonly '~types': {
-    readonly input: Input;
-    readonly output: Output;
-  };
+	/** Type carriers (compile-time only, never accessed at runtime) */
+	readonly '~types': {
+		readonly input: Input
+		readonly output: Output
+	}
 
-  /** Core validation - MUST be implemented */
-  readonly '~validate': (data: unknown) => ValidationResult<Output>;
+	/** Core validation - MUST be implemented */
+	readonly '~validate': (data: unknown) => ValidationResult<Output>
 
-  /** Optional: Async validation */
-  readonly '~validateAsync'?: (data: unknown) => Promise<ValidationResult<Output>>;
+	/** Optional: Async validation */
+	readonly '~validateAsync'?: (data: unknown) => Promise<ValidationResult<Output>>
 
-  /** Optional: JSON Schema conversion */
-  readonly '~toJsonSchema'?: () => JSONSchema;
+	/** Optional: JSON Schema conversion */
+	readonly '~toJsonSchema'?: () => JSONSchema
 
-  /** Optional: Coercion (convert before validate) */
-  readonly '~coerce'?: (data: unknown) => unknown;
+	/** Optional: Coercion (convert before validate) */
+	readonly '~coerce'?: (data: unknown) => unknown
 
-  /** Optional: Metadata */
-  readonly '~meta'?: SchemaMetadata;
+	/** Optional: Metadata */
+	readonly '~meta'?: SchemaMetadata
 }
 
 // ============================================================================
@@ -106,15 +106,15 @@ export interface AnySchemaV1<Output = unknown, Input = Output> {
  * Standard Schema result type
  */
 export type StandardSchemaResult<T> =
-  | { value: T; issues?: never }
-  | { value?: never; issues: readonly StandardSchemaIssue[] };
+	| { value: T; issues?: never }
+	| { value?: never; issues: readonly StandardSchemaIssue[] }
 
 /**
  * Standard Schema issue
  */
 export interface StandardSchemaIssue {
-  readonly message: string;
-  readonly path?: readonly (PropertyKey | { key: PropertyKey })[];
+	readonly message: string
+	readonly path?: readonly (PropertyKey | { key: PropertyKey })[]
 }
 
 /**
@@ -123,15 +123,15 @@ export interface StandardSchemaIssue {
  * @see https://github.com/standard-schema/standard-schema
  */
 export interface StandardSchemaV1<Output = unknown, Input = unknown> {
-  readonly '~standard': {
-    readonly version: 1;
-    readonly vendor: string;
-    readonly validate: (data: unknown) => StandardSchemaResult<Output>;
-    readonly types?: {
-      readonly input: Input;
-      readonly output: Output;
-    };
-  };
+	readonly '~standard': {
+		readonly version: 1
+		readonly vendor: string
+		readonly validate: (data: unknown) => StandardSchemaResult<Output>
+		readonly types?: {
+			readonly input: Input
+			readonly output: Output
+		}
+	}
 }
 
 // ============================================================================
@@ -144,11 +144,11 @@ export interface StandardSchemaV1<Output = unknown, Input = unknown> {
  * Matches: Zod v3+
  */
 export interface ZodLike {
-  readonly _output: unknown;
-  readonly _input: unknown;
-  readonly _def: unknown;
-  safeParse(data: unknown): unknown;
-  parse(data: unknown): unknown;
+	readonly _output: unknown
+	readonly _input: unknown
+	readonly _def: unknown
+	safeParse(data: unknown): unknown
+	parse(data: unknown): unknown
 }
 
 /**
@@ -157,12 +157,12 @@ export interface ZodLike {
  * Matches: Valibot v1+
  */
 export interface ValibotLike {
-  readonly types: {
-    readonly input: unknown;
-    readonly output: unknown;
-  };
-  readonly kind: string;
-  readonly async: boolean;
+	readonly types: {
+		readonly input: unknown
+		readonly output: unknown
+	}
+	readonly kind: string
+	readonly async: boolean
 }
 
 /**
@@ -171,10 +171,10 @@ export interface ValibotLike {
  * Matches: ArkType v2+
  */
 export interface ArkTypeLike {
-  readonly infer: unknown;
-  readonly inferIn: unknown;
-  toJsonSchema(): unknown;
-  (data: unknown): unknown;
+	readonly infer: unknown
+	readonly inferIn: unknown
+	toJsonSchema(): unknown
+	(data: unknown): unknown
 }
 
 /**
@@ -183,12 +183,12 @@ export interface ArkTypeLike {
  * Matches: Yup v1+
  */
 export interface YupLike {
-  readonly __outputType: unknown;
-  readonly __inputType: unknown;
-  readonly __isYupSchema__: true;
-  validate(data: unknown): Promise<unknown>;
-  validateSync(data: unknown): unknown;
-  isValidSync(data: unknown): boolean;
+	readonly __outputType: unknown
+	readonly __inputType: unknown
+	readonly __isYupSchema__: true
+	validate(data: unknown): Promise<unknown>
+	validateSync(data: unknown): unknown
+	isValidSync(data: unknown): boolean
 }
 
 /**
@@ -198,9 +198,9 @@ export interface YupLike {
  * Note: Joi has NO type inference support
  */
 export interface JoiLike {
-  readonly $_root: unknown;
-  readonly type: string;
-  validate(data: unknown): { error?: unknown; value: unknown };
+	readonly $_root: unknown
+	readonly type: string
+	validate(data: unknown): { error?: unknown; value: unknown }
 }
 
 /**
@@ -209,13 +209,13 @@ export interface JoiLike {
  * Matches: io-ts v2+
  */
 export interface IoTsLike {
-  readonly _A: unknown;
-  readonly _I: unknown;
-  readonly _O: unknown;
-  readonly _tag: string;
-  decode(data: unknown): unknown;
-  encode(data: unknown): unknown;
-  is(data: unknown): boolean;
+	readonly _A: unknown
+	readonly _I: unknown
+	readonly _O: unknown
+	readonly _tag: string
+	decode(data: unknown): unknown
+	encode(data: unknown): unknown
+	is(data: unknown): boolean
 }
 
 /**
@@ -224,10 +224,10 @@ export interface IoTsLike {
  * Matches: Superstruct v1+
  */
 export interface SuperstructLike {
-  readonly TYPE: unknown;
-  refiner(data: unknown, context: unknown): unknown;
-  validator(data: unknown, context: unknown): unknown;
-  coercer(data: unknown, context: unknown): unknown;
+	readonly TYPE: unknown
+	refiner(data: unknown, context: unknown): unknown
+	validator(data: unknown, context: unknown): unknown
+	coercer(data: unknown, context: unknown): unknown
 }
 
 /**
@@ -237,10 +237,10 @@ export interface SuperstructLike {
  * Note: TypeBox schemas ARE JSON Schema
  */
 export interface TypeBoxLike {
-  readonly static: unknown;
-  readonly params: unknown;
-  // TypeBox uses Symbol.for('TypeBox.Kind')
-  readonly [key: symbol]: unknown;
+	readonly static: unknown
+	readonly params: unknown
+	// TypeBox uses Symbol.for('TypeBox.Kind')
+	readonly [key: symbol]: unknown
 }
 
 /**
@@ -249,10 +249,10 @@ export interface TypeBoxLike {
  * Matches: Effect Schema (formerly @effect/schema)
  */
 export interface EffectSchemaLike {
-  readonly Type: unknown;
-  readonly Encoded: unknown;
-  readonly ast: unknown;
-  readonly annotations: unknown;
+	readonly Type: unknown
+	readonly Encoded: unknown
+	readonly ast: unknown
+	readonly annotations: unknown
 }
 
 /**
@@ -261,9 +261,9 @@ export interface EffectSchemaLike {
  * Matches: Runtypes v6+
  */
 export interface RuntypesLike {
-  readonly reflect: unknown;
-  check(data: unknown): unknown;
-  guard(data: unknown): boolean;
+	readonly reflect: unknown
+	check(data: unknown): unknown
+	guard(data: unknown): boolean
 }
 
 // ============================================================================
@@ -281,38 +281,38 @@ export interface RuntypesLike {
  * Returns `never` if schema is not recognized.
  */
 export type InferOutput<T> =
-  // 1. AnySchema Protocol
-  T extends { '~types': { output: infer O } }
-    ? O
-    : // 2. Standard Schema
-      T extends { '~standard': { types: { output: infer O } } }
-      ? O
-      : // 3. Zod
-        T extends { _output: infer O }
-        ? O
-        : // 4. Valibot
-          T extends { types: { output: infer O } }
-          ? O
-          : // 5. ArkType
-            T extends { infer: infer O }
-            ? O
-            : // 6. Yup
-              T extends { __outputType: infer O }
-              ? O
-              : // 7. io-ts
-                T extends { _A: infer O }
-                ? O
-                : // 8. Superstruct
-                  T extends { TYPE: infer O }
-                  ? O
-                  : // 9. TypeBox
-                    T extends { static: infer O }
-                    ? O
-                    : // 10. Effect Schema
-                      T extends { Type: infer O }
-                      ? O
-                      : // Not recognized
-                        never;
+	// 1. AnySchema Protocol
+	T extends { '~types': { output: infer O } }
+		? O
+		: // 2. Standard Schema
+			T extends { '~standard': { types: { output: infer O } } }
+			? O
+			: // 3. Zod
+				T extends { _output: infer O }
+				? O
+				: // 4. Valibot
+					T extends { types: { output: infer O } }
+					? O
+					: // 5. ArkType
+						T extends { infer: infer O }
+						? O
+						: // 6. Yup
+							T extends { __outputType: infer O }
+							? O
+							: // 7. io-ts
+								T extends { _A: infer O }
+								? O
+								: // 8. Superstruct
+									T extends { TYPE: infer O }
+									? O
+									: // 9. TypeBox
+										T extends { static: infer O }
+										? O
+										: // 10. Effect Schema
+											T extends { Type: infer O }
+											? O
+											: // Not recognized
+												never
 
 /**
  * Infer input type from any supported schema
@@ -320,44 +320,44 @@ export type InferOutput<T> =
  * For schemas with transforms, this is the type before transformation.
  */
 export type InferInput<T> =
-  // AnySchema Protocol
-  T extends { '~types': { input: infer I } }
-    ? I
-    : // Standard Schema
-      T extends { '~standard': { types: { input: infer I } } }
-      ? I
-      : // Zod
-        T extends { _input: infer I }
-        ? I
-        : // Valibot
-          T extends { types: { input: infer I } }
-          ? I
-          : // ArkType
-            T extends { inferIn: infer I }
-            ? I
-            : // Yup
-              T extends { __inputType: infer I }
-              ? I
-              : // io-ts
-                T extends { _I: infer I }
-                ? I
-                : // Effect Schema
-                  T extends { Encoded: infer I }
-                  ? I
-                  : // Fallback to output type
-                    InferOutput<T>;
+	// AnySchema Protocol
+	T extends { '~types': { input: infer I } }
+		? I
+		: // Standard Schema
+			T extends { '~standard': { types: { input: infer I } } }
+			? I
+			: // Zod
+				T extends { _input: infer I }
+				? I
+				: // Valibot
+					T extends { types: { input: infer I } }
+					? I
+					: // ArkType
+						T extends { inferIn: infer I }
+						? I
+						: // Yup
+							T extends { __inputType: infer I }
+							? I
+							: // io-ts
+								T extends { _I: infer I }
+								? I
+								: // Effect Schema
+									T extends { Encoded: infer I }
+									? I
+									: // Fallback to output type
+										InferOutput<T>
 
 /**
  * Check if a type is a valid schema (has type inference)
  */
-export type IsValidSchema<T> = InferOutput<T> extends never ? false : true;
+export type IsValidSchema<T> = InferOutput<T> extends never ? false : true
 
 /**
  * Assert that T is a valid schema, otherwise return never
  *
  * Use this in function parameters to cause compile-time errors.
  */
-export type AssertValidSchema<T> = InferOutput<T> extends never ? never : T;
+export type AssertValidSchema<T> = InferOutput<T> extends never ? never : T
 
 // ============================================================================
 // Capability Types
@@ -369,18 +369,18 @@ export type AssertValidSchema<T> = InferOutput<T> extends never ? never : T;
  * Used to restrict toJsonSchema() at compile time.
  */
 export type JsonSchemaCapable =
-  // AnySchema Protocol with toJsonSchema
-  | { '~toJsonSchema': () => unknown }
-  // ArkType built-in
-  | { toJsonSchema: () => unknown; infer: unknown }
-  // Zod (via zod-to-json-schema)
-  | { _def: unknown; _output: unknown; safeParse: unknown }
-  // Valibot (via @valibot/to-json-schema)
-  | { kind: string; types: { output: unknown } }
-  // TypeBox (is JSON Schema)
-  | { static: unknown; type?: string; properties?: unknown }
-  // Effect Schema (via built-in)
-  | { Type: unknown; ast: unknown };
+	// AnySchema Protocol with toJsonSchema
+	| { '~toJsonSchema': () => unknown }
+	// ArkType built-in
+	| { toJsonSchema: () => unknown; infer: unknown }
+	// Zod (via zod-to-json-schema)
+	| { _def: unknown; _output: unknown; safeParse: unknown }
+	// Valibot (via @valibot/to-json-schema)
+	| { kind: string; types: { output: unknown } }
+	// TypeBox (is JSON Schema)
+	| { static: unknown; type?: string; properties?: unknown }
+	// Effect Schema (via built-in)
+	| { Type: unknown; ast: unknown }
 
 /**
  * Schemas that support type inference
@@ -388,60 +388,60 @@ export type JsonSchemaCapable =
  * Used to restrict validate(), is(), parse() at compile time.
  */
 export type InferCapable =
-  // AnySchema Protocol
-  | { '~types': { output: unknown } }
-  // Standard Schema
-  | { '~standard': { types: { output: unknown } } }
-  // Zod
-  | { _output: unknown; safeParse: unknown }
-  // Valibot
-  | { types: { output: unknown }; kind: string }
-  // ArkType
-  | { infer: unknown }
-  // Yup
-  | { __outputType: unknown; __isYupSchema__: true }
-  // io-ts
-  | { _A: unknown; decode: unknown }
-  // Superstruct
-  | { TYPE: unknown; refiner: unknown }
-  // TypeBox
-  | { static: unknown }
-  // Effect Schema
-  | { Type: unknown; ast: unknown };
+	// AnySchema Protocol
+	| { '~types': { output: unknown } }
+	// Standard Schema
+	| { '~standard': { types: { output: unknown } } }
+	// Zod
+	| { _output: unknown; safeParse: unknown }
+	// Valibot
+	| { types: { output: unknown }; kind: string }
+	// ArkType
+	| { infer: unknown }
+	// Yup
+	| { __outputType: unknown; __isYupSchema__: true }
+	// io-ts
+	| { _A: unknown; decode: unknown }
+	// Superstruct
+	| { TYPE: unknown; refiner: unknown }
+	// TypeBox
+	| { static: unknown }
+	// Effect Schema
+	| { Type: unknown; ast: unknown }
 
 /**
  * Schemas that support async validation
  */
 export type AsyncCapable =
-  // AnySchema Protocol
-  | { '~validateAsync': (data: unknown) => Promise<unknown> }
-  // Standard Schema (always async-capable)
-  | { '~standard': unknown }
-  // Zod
-  | { parseAsync: (data: unknown) => Promise<unknown> }
-  // Valibot async
-  | { async: true }
-  // Yup
-  | { validate: (data: unknown) => Promise<unknown> }
-  // io-ts
-  | { decode: unknown }
-  // Effect Schema
-  | { ast: unknown };
+	// AnySchema Protocol
+	| { '~validateAsync': (data: unknown) => Promise<unknown> }
+	// Standard Schema (always async-capable)
+	| { '~standard': unknown }
+	// Zod
+	| { parseAsync: (data: unknown) => Promise<unknown> }
+	// Valibot async
+	| { async: true }
+	// Yup
+	| { validate: (data: unknown) => Promise<unknown> }
+	// io-ts
+	| { decode: unknown }
+	// Effect Schema
+	| { ast: unknown }
 
 /**
  * Schemas that have metadata
  */
 export type MetadataCapable =
-  // AnySchema Protocol
-  | { '~meta': SchemaMetadata }
-  // Zod
-  | { _def: { description?: string } }
-  // Yup
-  | { spec: { meta?: unknown } }
-  // TypeBox
-  | { title?: string; description?: string }
-  // Effect Schema
-  | { annotations: unknown };
+	// AnySchema Protocol
+	| { '~meta': SchemaMetadata }
+	// Zod
+	| { _def: { description?: string } }
+	// Yup
+	| { spec: { meta?: unknown } }
+	// TypeBox
+	| { title?: string; description?: string }
+	// Effect Schema
+	| { annotations: unknown }
 
 // ============================================================================
 // Union Types
@@ -450,29 +450,29 @@ export type MetadataCapable =
 /**
  * Any schema that implements AnySchema Protocol
  */
-export type AnySchemaProtocol = AnySchemaV1<unknown, unknown>;
+export type AnySchemaProtocol = AnySchemaV1<unknown, unknown>
 
 /**
  * Any schema that implements Standard Schema
  */
-export type StandardSchema = StandardSchemaV1<unknown, unknown>;
+export type StandardSchema = StandardSchemaV1<unknown, unknown>
 
 /**
  * Any known schema type (structural union)
  */
 export type AnySchema =
-  | AnySchemaProtocol
-  | StandardSchema
-  | ZodLike
-  | ValibotLike
-  | ArkTypeLike
-  | YupLike
-  | JoiLike
-  | IoTsLike
-  | SuperstructLike
-  | TypeBoxLike
-  | EffectSchemaLike
-  | RuntypesLike;
+	| AnySchemaProtocol
+	| StandardSchema
+	| ZodLike
+	| ValibotLike
+	| ArkTypeLike
+	| YupLike
+	| JoiLike
+	| IoTsLike
+	| SuperstructLike
+	| TypeBoxLike
+	| EffectSchemaLike
+	| RuntypesLike
 
 // ============================================================================
 // Vendor Detection
@@ -482,25 +482,25 @@ export type AnySchema =
  * Supported schema vendors
  */
 export type SchemaVendor =
-  | 'anyschema'
-  | 'standard-schema'
-  | 'zod'
-  | 'valibot'
-  | 'arktype'
-  | 'yup'
-  | 'joi'
-  | 'io-ts'
-  | 'superstruct'
-  | 'typebox'
-  | 'effect'
-  | 'runtypes';
+	| 'anyschema'
+	| 'standard-schema'
+	| 'zod'
+	| 'valibot'
+	| 'arktype'
+	| 'yup'
+	| 'joi'
+	| 'io-ts'
+	| 'superstruct'
+	| 'typebox'
+	| 'effect'
+	| 'runtypes'
 
 /**
  * Detection result
  */
 export interface DetectionResult {
-  readonly type: 'anyschema' | 'standard-schema' | 'duck';
-  readonly vendor: SchemaVendor | string;
+	readonly type: 'anyschema' | 'standard-schema' | 'duck'
+	readonly vendor: SchemaVendor | string
 }
 
 // ============================================================================
@@ -511,80 +511,78 @@ export interface DetectionResult {
  * JSON Schema type definition (Draft-07 compatible)
  */
 export interface JSONSchema {
-  $schema?: string;
-  $id?: string;
-  $ref?: string;
-  $defs?: Record<string, JSONSchema>;
-  definitions?: Record<string, JSONSchema>;
+	$schema?: string
+	$id?: string
+	$ref?: string
+	$defs?: Record<string, JSONSchema>
+	definitions?: Record<string, JSONSchema>
 
-  type?:
-    | 'string'
-    | 'number'
-    | 'integer'
-    | 'boolean'
-    | 'object'
-    | 'array'
-    | 'null'
-    | Array<
-        'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'
-      >;
+	type?:
+		| 'string'
+		| 'number'
+		| 'integer'
+		| 'boolean'
+		| 'object'
+		| 'array'
+		| 'null'
+		| Array<'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null'>
 
-  // String
-  minLength?: number;
-  maxLength?: number;
-  pattern?: string;
-  format?: string;
+	// String
+	minLength?: number
+	maxLength?: number
+	pattern?: string
+	format?: string
 
-  // Number
-  minimum?: number;
-  maximum?: number;
-  exclusiveMinimum?: number | boolean;
-  exclusiveMaximum?: number | boolean;
-  multipleOf?: number;
+	// Number
+	minimum?: number
+	maximum?: number
+	exclusiveMinimum?: number | boolean
+	exclusiveMaximum?: number | boolean
+	multipleOf?: number
 
-  // Object
-  properties?: Record<string, JSONSchema>;
-  additionalProperties?: boolean | JSONSchema;
-  required?: string[];
-  propertyNames?: JSONSchema;
-  minProperties?: number;
-  maxProperties?: number;
-  patternProperties?: Record<string, JSONSchema>;
+	// Object
+	properties?: Record<string, JSONSchema>
+	additionalProperties?: boolean | JSONSchema
+	required?: string[]
+	propertyNames?: JSONSchema
+	minProperties?: number
+	maxProperties?: number
+	patternProperties?: Record<string, JSONSchema>
 
-  // Array
-  items?: JSONSchema | JSONSchema[];
-  additionalItems?: boolean | JSONSchema;
-  minItems?: number;
-  maxItems?: number;
-  uniqueItems?: boolean;
-  contains?: JSONSchema;
+	// Array
+	items?: JSONSchema | JSONSchema[]
+	additionalItems?: boolean | JSONSchema
+	minItems?: number
+	maxItems?: number
+	uniqueItems?: boolean
+	contains?: JSONSchema
 
-  // Composition
-  allOf?: JSONSchema[];
-  anyOf?: JSONSchema[];
-  oneOf?: JSONSchema[];
-  not?: JSONSchema;
+	// Composition
+	allOf?: JSONSchema[]
+	anyOf?: JSONSchema[]
+	oneOf?: JSONSchema[]
+	not?: JSONSchema
 
-  // Conditionals
-  if?: JSONSchema;
-  then?: JSONSchema;
-  else?: JSONSchema;
+	// Conditionals
+	if?: JSONSchema
+	then?: JSONSchema
+	else?: JSONSchema
 
-  // Metadata
-  title?: string;
-  description?: string;
-  default?: unknown;
-  examples?: unknown[];
-  deprecated?: boolean;
-  readOnly?: boolean;
-  writeOnly?: boolean;
+	// Metadata
+	title?: string
+	description?: string
+	default?: unknown
+	examples?: unknown[]
+	deprecated?: boolean
+	readOnly?: boolean
+	writeOnly?: boolean
 
-  // Enum
-  enum?: unknown[];
-  const?: unknown;
+	// Enum
+	enum?: unknown[]
+	const?: unknown
 
-  // Extensible
-  [key: string]: unknown;
+	// Extensible
+	[key: string]: unknown
 }
 
 // ============================================================================
@@ -595,12 +593,12 @@ export interface JSONSchema {
  * Validation error thrown by parse() and assert()
  */
 export class ValidationError extends Error {
-  readonly issues: readonly ValidationIssue[];
+	readonly issues: readonly ValidationIssue[]
 
-  constructor(issues: readonly ValidationIssue[]) {
-    const message = issues.map((i) => i.message).join('; ');
-    super(message);
-    this.name = 'ValidationError';
-    this.issues = issues;
-  }
+	constructor(issues: readonly ValidationIssue[]) {
+		const message = issues.map((i) => i.message).join('; ')
+		super(message)
+		this.name = 'ValidationError'
+		this.issues = issues
+	}
 }
