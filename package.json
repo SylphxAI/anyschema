@@ -1,6 +1,6 @@
 {
 	"name": "@sylphx/anyschema",
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"packageManager": "bun@1.3.3",
 	"description": "Universal schema utilities for TypeScript. Zero dependencies. Works with Zod, Valibot, ArkType, Yup, Joi, io-ts, and more.",
 	"type": "module",
