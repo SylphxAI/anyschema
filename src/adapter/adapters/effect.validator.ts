@@ -2,7 +2,7 @@
  * Effect Schema Validator Adapter
  *
  * Minimal adapter for validation only.
- * Uses dynamic import to avoid bundling @effect/schema.
+ * Effect uses decodeUnknownEither for validation.
  */
 
 import { defineValidatorAdapter } from '../types.js'
@@ -26,26 +26,6 @@ const isEffectSchema = (s: unknown): s is EffectSchema => {
 	return 'Type' in s && 'Encoded' in s && 'ast' in s
 }
 
-// Module type for Effect Schema
-interface EffectSchemaModule {
-	decodeUnknownSync: (schema: EffectSchema) => (data: unknown) => unknown
-}
-
-// Lazy-loaded Schema module
-let SchemaModule: EffectSchemaModule | null = null
-
-const loadSchemaModule = async (): Promise<EffectSchemaModule | null> => {
-	if (!SchemaModule) {
-		try {
-			const mod = await import('@effect/schema/Schema')
-			SchemaModule = mod as unknown as EffectSchemaModule
-		} catch {
-			return null
-		}
-	}
-	return SchemaModule
-}
-
 // ============================================================================
 // Validator Adapter
 // ============================================================================
@@ -55,26 +35,11 @@ export const effectValidator = defineValidatorAdapter<EffectSchema>({
 	match: isEffectSchema,
 
 	validate: (s, data) => {
-		// Try to use globally available module if loaded
-		if (SchemaModule) {
-			try {
-				const result = SchemaModule.decodeUnknownSync(s)(data)
-				return { success: true as const, data: result }
-			} catch (error) {
-				const effectError = error as { message?: string }
-				return {
-					success: false as const,
-					issues: [{ message: effectError.message ?? 'Validation failed' }],
-				}
-			}
-		}
-
-		// Try dynamic require for sync validation
 		try {
+			// Use decodeUnknownSync from @effect/schema/Schema
 			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const mod = require('@effect/schema/Schema') as EffectSchemaModule
-			SchemaModule = mod
-			const result = mod.decodeUnknownSync(s)(data)
+			const { decodeUnknownSync } = require('@effect/schema/Schema')
+			const result = decodeUnknownSync(s)(data)
 			return { success: true as const, data: result }
 		} catch (error) {
 			const effectError = error as { message?: string }
@@ -86,16 +51,11 @@ export const effectValidator = defineValidatorAdapter<EffectSchema>({
 	},
 
 	validateAsync: async (s, data) => {
-		await loadSchemaModule()
-		if (!SchemaModule) {
-			return {
-				success: false as const,
-				issues: [{ message: 'Effect Schema requires @effect/schema' }],
-			}
-		}
-
 		try {
-			const result = SchemaModule.decodeUnknownSync(s)(data)
+			const mod = (await import('@effect/schema/Schema')) as unknown as {
+				decodeUnknownSync: (schema: EffectSchema) => (data: unknown) => unknown
+			}
+			const result = mod.decodeUnknownSync(s)(data)
 			return { success: true as const, data: result }
 		} catch (error) {
 			const effectError = error as { message?: string }

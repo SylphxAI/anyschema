@@ -25,6 +25,72 @@ function isCallable(obj: unknown): obj is AnyFn {
 // Validation Helpers
 // ============================================================================
 
+// ============================================================================
+// Standard Schema Helpers
+// ============================================================================
+
+/**
+ * Standard Schema ~standard.validate validation
+ * Works with: Zod v4, Valibot, ArkType, Effect, Yup v1+
+ */
+export function withStandardSchema(
+	schema: unknown,
+	data: unknown
+): ValidationResult<unknown> | null {
+	const std = schema as { '~standard'?: { validate?: (data: unknown) => unknown } }
+	if (!std['~standard']?.validate) return null
+
+	const result = std['~standard'].validate(data) as {
+		value?: unknown
+		issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
+	}
+
+	if (!result.issues || result.issues.length === 0) {
+		return { success: true, data: result.value }
+	}
+
+	return {
+		success: false,
+		issues: result.issues.map((i) => ({
+			message: i.message,
+			...(i.path ? { path: i.path.map((p) => p.key) } : {}),
+		})),
+	}
+}
+
+/**
+ * Standard Schema ~standard.validate async validation
+ * Works with: Zod v4, Valibot, ArkType, Effect, Yup v1+
+ */
+export async function withStandardSchemaAsync(
+	schema: unknown,
+	data: unknown
+): Promise<ValidationResult<unknown> | null> {
+	const std = schema as { '~standard'?: { validate?: (data: unknown) => unknown | Promise<unknown> } }
+	if (!std['~standard']?.validate) return null
+
+	const result = (await std['~standard'].validate(data)) as {
+		value?: unknown
+		issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
+	}
+
+	if (!result.issues || result.issues.length === 0) {
+		return { success: true, data: result.value }
+	}
+
+	return {
+		success: false,
+		issues: result.issues.map((i) => ({
+			message: i.message,
+			...(i.path ? { path: i.path.map((p) => p.key) } : {}),
+		})),
+	}
+}
+
+// ============================================================================
+// Library-Specific Helpers
+// ============================================================================
+
 /**
  * Zod-style safeParse validation
  * Works with: Zod v3, Zod v4

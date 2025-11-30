@@ -36,11 +36,24 @@ export default defineConfig({
 	splitting: true,
 	minify: false,
 	external: [
+		// Schema libraries - don't bundle these
 		'zod',
 		'zod/v4',
-		'zod-to-json-schema',
 		'valibot',
-		'@valibot/to-json-schema',
 		'arktype',
+		'yup',
+		'joi',
+		'io-ts',
+		'fp-ts',
+		'superstruct',
+		'@sinclair/typebox',
+		'@sinclair/typebox/value',
+		'@effect/schema',
+		'@effect/schema/Schema',
+		'effect',
+		'runtypes',
+		// JSON Schema converters
+		'zod-to-json-schema',
+		'@valibot/to-json-schema',
 	],
 })

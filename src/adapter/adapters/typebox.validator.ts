@@ -2,7 +2,7 @@
  * TypeBox Validator Adapter
  *
  * Minimal adapter for validation only.
- * Uses dynamic import to avoid bundling @sinclair/typebox/value.
+ * TypeBox uses Value.Check from @sinclair/typebox/value.
  */
 
 import { defineValidatorAdapter } from '../types.js'
@@ -31,33 +31,22 @@ const isTypeBoxSchema = (s: unknown): s is TypeBoxSchema => {
 	return 'static' in s && 'params' in s
 }
 
-// Lazy-loaded Value module
-let Value: {
-	Check: (schema: unknown, value: unknown) => boolean
-	Errors: (schema: unknown, value: unknown) => Iterable<{ message: string; path: string }>
-} | null = null
+// ============================================================================
+// Validator Adapter
+// ============================================================================
 
-const loadValue = async () => {
-	if (!Value) {
-		try {
-			const mod = await import('@sinclair/typebox/value')
-			Value = mod.Value
-		} catch {
-			return null
-		}
-	}
-	return Value
-}
+export const typeboxValidator = defineValidatorAdapter<TypeBoxSchema>({
+	vendor: 'typebox',
+	match: isTypeBoxSchema,
 
-// Sync validation using Check
-const validateSync = (schema: TypeBoxSchema, data: unknown) => {
-	// Try to use globally available Value if loaded
-	if (Value) {
+	validate: (s, data) => {
 		try {
-			if (Value.Check(schema, data)) {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const { Value } = require('@sinclair/typebox/value')
+			if (Value.Check(s, data)) {
 				return { success: true as const, data }
 			}
-			const errors = [...Value.Errors(schema, data)]
+			const errors = [...Value.Errors(s, data)] as Array<{ message: string; path?: string }>
 			return {
 				success: false as const,
 				issues: errors.map((e) => {
@@ -71,49 +60,42 @@ const validateSync = (schema: TypeBoxSchema, data: unknown) => {
 				}),
 			}
 		} catch {
-			// Fall through
+			return {
+				success: false as const,
+				issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
+			}
 		}
-	}
+	},
 
-	// Try dynamic require for sync validation
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const { Value: V } = require('@sinclair/typebox/value')
-		Value = V
-		if (V.Check(schema, data)) {
-			return { success: true as const, data }
-		}
-		const errors = [...V.Errors(schema, data)]
-		return {
-			success: false as const,
-			issues: errors.map((e: { message: string; path?: string }) => {
-				const issue: { message: string; path?: readonly (string | number)[] } = {
-					message: e.message,
-				}
-				if (e.path) {
-					issue.path = e.path.split('/').filter(Boolean)
-				}
-				return issue
-			}),
-		}
-	} catch {
-		return {
-			success: false as const,
-			issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
-		}
-	}
-}
-
-// ============================================================================
-// Validator Adapter
-// ============================================================================
-
-export const typeboxValidator = defineValidatorAdapter<TypeBoxSchema>({
-	vendor: 'typebox',
-	match: isTypeBoxSchema,
-	validate: (s, data) => validateSync(s, data),
 	validateAsync: async (s, data) => {
-		await loadValue()
-		return validateSync(s, data)
+		try {
+			const mod = (await import('@sinclair/typebox/value')) as {
+				Value: {
+					Check: (schema: unknown, value: unknown) => boolean
+					Errors: (schema: unknown, value: unknown) => Iterable<{ message: string; path?: string }>
+				}
+			}
+			if (mod.Value.Check(s, data)) {
+				return { success: true as const, data }
+			}
+			const errors = [...mod.Value.Errors(s, data)]
+			return {
+				success: false as const,
+				issues: errors.map((e) => {
+					const issue: { message: string; path?: readonly (string | number)[] } = {
+						message: e.message,
+					}
+					if (e.path) {
+						issue.path = e.path.split('/').filter(Boolean)
+					}
+					return issue
+				}),
+			}
+		} catch {
+			return {
+				success: false as const,
+				issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
+			}
+		}
 	},
 })
