@@ -1,129 +1,111 @@
 # AnySchema
 
-> Universal schema utilities for TypeScript. Zero dependencies. Works with any validation library.
+> Universal schema utilities for TypeScript. Zero dependencies. Plugin-based adapter system.
 
-[![npm version](https://badge.fury.io/js/anyschema.svg)](https://www.npmjs.com/package/anyschema)
+[![npm version](https://badge.fury.io/js/@sylphx/anyschema.svg)](https://www.npmjs.com/package/@sylphx/anyschema)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Why AnySchema?
 
-The JavaScript ecosystem has **dozens of schema validation libraries**. Each has its own API, type inference, and (maybe) JSON Schema support. This fragmentation causes:
+The JavaScript ecosystem has **dozens of schema validation libraries**. Each has its own API, type inference, and JSON Schema support. This causes:
 
 - **Lock-in** — Hard to switch libraries
 - **Incompatibility** — Can't use schemas from different libs together
 - **Duplication** — Every tool rebuilds support for each library
-- **Confusion** — Which library should I use?
 
-**AnySchema solves this** by providing a universal layer that works with ALL schema libraries:
+**AnySchema solves this** with a **thin adapter system**:
 
 ```typescript
-import { validate, toJsonSchema, type InferOutput } from 'anyschema';
+import { validate, toJsonSchema, type Infer } from '@sylphx/anyschema'
 
-// Works with ANY supported schema library
-validate(zodSchema, data);      // ✓
-validate(valibotSchema, data);  // ✓
-validate(yupSchema, data);      // ✓
-validate(arktypeSchema, data);  // ✓
-// ... and more
+// Works with ANY supported schema library - zero config
+validate(zodSchema, data)
+validate(valibotSchema, data)
+validate(arktypeSchema, data)
 
 // Universal type inference
-type Output = InferOutput<typeof anySchema>;
+type Output = Infer<typeof anySchema>
+
+// JSON Schema conversion - no external deps
+const jsonSchema = toJsonSchema(zodV4Schema)
 ```
 
-## Features
+## Architecture
 
-- **🎯 Zero Dependencies** — No runtime deps, only peer deps for converters
-- **🔍 Auto-Detection** — Automatically detects which library you're using
-- **📦 Universal API** — Same API for all schema libraries
-- **🔒 Type-Safe** — Full TypeScript support with type inference
-- **🚫 Compile-Time Errors** — Unsupported operations fail at compile time, not runtime
-- **🌳 Tree-Shakable** — Only loads what you use
-- **📋 Protocol Support** — Supports Standard Schema + our own AnySchema Protocol
-- **🔮 Future-Proof** — New libraries just implement the protocol
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Core Functions                        │
+│  validate() · toJsonSchema() · parse() · is() · infer   │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────┐
+│                   Adapter Interface                      │
+│  match · isString · isObject · getShape · validate ...  │
+└─────────────────────────┬───────────────────────────────┘
+                          │
+        ┌─────────────────┼─────────────────┐
+        ▼                 ▼                 ▼
+   ┌─────────┐      ┌──────────┐     ┌──────────┐
+   │ Zod v4  │      │ Valibot  │     │ ArkType  │
+   │ Adapter │      │ Adapter  │     │ Adapter  │
+   └─────────┘      └──────────┘     └──────────┘
+```
+
+**Each adapter is ~50 lines** — just duck-type detection and property access.
 
 ## Installation
 
 ```bash
-npm install anyschema
+npm install @sylphx/anyschema
 ```
 
-No peer dependencies required! AnySchema works with whatever schema libraries you already have installed.
+No peer dependencies! Works with whatever schema libraries you have installed.
 
 ## Quick Start
 
 ```typescript
-import { validate, toJsonSchema, is, parse, type InferOutput } from 'anyschema';
-import { z } from 'zod';
+import { validate, toJsonSchema, parse, is, type Infer } from '@sylphx/anyschema'
+import { z } from 'zod'
 
-// Define a schema (using any supported library)
 const userSchema = z.object({
   name: z.string(),
   age: z.number().min(0),
-});
+})
 
 // Type inference
-type User = InferOutput<typeof userSchema>;
-// { name: string; age: number }
+type User = Infer<typeof userSchema>
 
 // Validation
-const result = validate(userSchema, { name: 'John', age: 30 });
+const result = validate(userSchema, data)
 if (result.success) {
-  console.log(result.data); // Typed as User
-} else {
-  console.log(result.issues);
+  console.log(result.data) // typed as User
 }
 
 // Type guard
-if (is(userSchema, unknownData)) {
-  unknownData.name; // Typed!
+if (is(userSchema, data)) {
+  data.name // typed!
 }
 
 // Parse (throws on error)
-const user = parse(userSchema, data);
+const user = parse(userSchema, data)
 
-// JSON Schema conversion
-const jsonSchema = await toJsonSchema(userSchema);
+// JSON Schema (sync, no deps!)
+const jsonSchema = toJsonSchema(userSchema)
 ```
 
 ## Supported Libraries
 
-| Library | Validate | Type Inference | JSON Schema | Detection |
-|---------|----------|----------------|-------------|-----------|
-| **AnySchema Protocol** | ✅ | ✅ | ✅ | `~anyschema` |
-| **Standard Schema** | ✅ | ✅ | ❌* | `~standard` |
-| [Zod](https://zod.dev) | ✅ | ✅ | ✅ | Duck typing |
-| [Valibot](https://valibot.dev) | ✅ | ✅ | ✅ | Duck typing |
-| [ArkType](https://arktype.io) | ✅ | ✅ | ✅ | Duck typing |
-| [Yup](https://github.com/jquense/yup) | ✅ | ✅ | ❌ | Duck typing |
-| [Joi](https://joi.dev) | ✅ | ❌ | ❌ | Duck typing |
-| [io-ts](https://gcanti.github.io/io-ts/) | ✅ | ✅ | ❌ | Duck typing |
-| [Superstruct](https://docs.superstructjs.org) | ✅ | ✅ | ❌ | Duck typing |
-| [TypeBox](https://github.com/sinclairzx81/typebox) | ✅ | ✅ | ✅ | Duck typing |
-| [Effect Schema](https://effect.website) | ✅ | ✅ | ✅ | Duck typing |
-
-*Standard Schema doesn't define JSON Schema conversion. AnySchema adds it via duck typing fallback.
-
-### Type-Safe Operations
-
-Operations that aren't supported by a library result in **compile-time errors**, not runtime errors:
-
-```typescript
-import Joi from 'joi';
-
-const joiSchema = Joi.string();
-
-// ❌ Compile-time error! Joi doesn't support type inference
-validate(joiSchema, data);
-// Error: Argument of type 'StringSchema' is not assignable to 'InferCapable'
-
-// ❌ Compile-time error! Joi doesn't support JSON Schema
-toJsonSchema(joiSchema);
-// Error: Argument of type 'StringSchema' is not assignable to 'JsonSchemaCapable'
-
-// ✅ Use the untyped version if you really need it
-validateAny(joiSchema, data); // Returns ValidationResult<unknown>
-```
+| Library | Validate | Type Infer | JSON Schema | Adapter |
+|---------|:--------:|:----------:|:-----------:|:-------:|
+| [Zod v4](https://zod.dev) | ✅ | ✅ | ✅ | Built-in |
+| [Zod v3](https://zod.dev) | ✅ | ✅ | ✅ | Built-in |
+| [Valibot](https://valibot.dev) | ✅ | ✅ | ✅ | Built-in |
+| [ArkType](https://arktype.io) | ✅ | ✅ | ✅ | Built-in |
+| [TypeBox](https://github.com/sinclairzx81/typebox) | ✅ | ✅ | ✅ | Built-in |
+| [Yup](https://github.com/jquense/yup) | ✅ | ✅ | 🚧 | Built-in |
+| [Effect Schema](https://effect.website) | ✅ | ✅ | 🚧 | Built-in |
+| Custom | ✅ | ✅ | ✅ | You write |
 
 ## API Reference
 
@@ -131,166 +113,88 @@ validateAny(joiSchema, data); // Returns ValidationResult<unknown>
 
 #### `validate(schema, data)`
 
-Validate data against a schema with full type inference.
-
 ```typescript
-function validate<T extends InferCapable>(
-  schema: T,
-  data: unknown
-): ValidationResult<InferOutput<T>>;
-```
-
-```typescript
-const result = validate(schema, { name: 'John' });
+const result = validate(schema, data)
 if (result.success) {
-  result.data; // Fully typed
+  result.data // fully typed
 } else {
-  result.issues; // Array of { message, path? }
+  result.issues // [{ message, path? }]
 }
 ```
 
 #### `validateAsync(schema, data)`
 
-Async validation for schemas that support it.
-
 ```typescript
-const result = await validateAsync(asyncSchema, data);
+const result = await validateAsync(asyncSchema, data)
 ```
 
-#### `validateAny(schema, data)`
+#### `parse(schema, data)`
 
-Validate without type inference (escape hatch).
+Parse and return typed data. Throws `ValidationError` on failure.
 
 ```typescript
-const result = validateAny(anySchema, data);
-// Returns ValidationResult<unknown>
+const user = parse(userSchema, data)
+```
+
+#### `parseAsync(schema, data)`
+
+```typescript
+const user = await parseAsync(asyncSchema, data)
 ```
 
 ### Type Guards
 
 #### `is(schema, data)`
 
-Type guard that narrows the type of data.
-
-```typescript
-function is<T extends InferCapable>(
-  schema: T,
-  data: unknown
-): data is InferOutput<T>;
-```
-
 ```typescript
 if (is(userSchema, data)) {
-  data.name; // TypeScript knows data is User
+  data.name // TypeScript knows it's User
 }
 ```
 
 #### `assert(schema, data)`
 
-Assert that data matches schema, throws if not.
-
 ```typescript
-function assert<T extends InferCapable>(
-  schema: T,
-  data: unknown
-): asserts data is InferOutput<T>;
-```
-
-```typescript
-assert(userSchema, data);
-data.name; // TypeScript knows data is User
-```
-
-### Parsing
-
-#### `parse(schema, data)`
-
-Parse data, throwing on validation errors.
-
-```typescript
-function parse<T extends InferCapable>(
-  schema: T,
-  data: unknown
-): InferOutput<T>;
-```
-
-```typescript
-try {
-  const user = parse(userSchema, data);
-} catch (error) {
-  // ValidationError with issues
-}
-```
-
-#### `parseAsync(schema, data)`
-
-Async version of parse.
-
-```typescript
-const user = await parseAsync(asyncSchema, data);
+assert(userSchema, data)
+data.name // TypeScript knows it's User
 ```
 
 ### JSON Schema
 
-#### `toJsonSchema(schema)` (async)
+#### `toJsonSchema(schema)`
 
-Convert a schema to JSON Schema. Uses dynamic imports for zero bundled dependencies.
-
-```typescript
-function toJsonSchema<T extends JsonSchemaCapable>(
-  schema: T
-): Promise<JSONSchema>;
-```
+Convert any supported schema to JSON Schema. **Sync, zero deps.**
 
 ```typescript
-const jsonSchema = await toJsonSchema(zodSchema);
+const jsonSchema = toJsonSchema(zodSchema)
 // { type: 'object', properties: { ... } }
 ```
 
-**Support Matrix:**
+**Supported conversions:**
 
-| Library | Support | Notes |
-|---------|---------|-------|
-| **Zod v4** | ✅ Built-in | No extra deps |
-| **Zod v3** | ⚠️ Requires | `npm i zod-to-json-schema` |
-| **ArkType** | ✅ Built-in | No extra deps |
-| **TypeBox** | ✅ Built-in | Schema IS JSON Schema |
-| **Valibot** | ⚠️ Requires | `npm i @valibot/to-json-schema` |
-| **Effect** | ⚠️ Requires | `@effect/schema` package |
-
-#### `toJsonSchemaSync(schema)`
-
-Sync version. **Note:** Does not support Zod v4 (use async version instead).
-
-```typescript
-const jsonSchema = toJsonSchemaSync(arktypeSchema); // ✅ Works
-const jsonSchema = toJsonSchemaSync(zodV4Schema);   // ❌ Throws error
-```
-
-**Sync Support:**
-
-| Library | Sync Support |
-|---------|--------------|
-| **Zod v4** | ❌ Use `toJsonSchema()` async |
-| **Zod v3** | ⚠️ Requires `zod-to-json-schema` |
-| **ArkType** | ✅ |
-| **TypeBox** | ✅ |
-| **Valibot** | ⚠️ Requires `@valibot/to-json-schema` |
+| Feature | Support |
+|---------|:-------:|
+| Primitives (string, number, boolean, null) | ✅ |
+| Objects | ✅ |
+| Arrays | ✅ |
+| Unions | ✅ |
+| Literals | ✅ |
+| Enums | ✅ |
+| Optional / Nullable | ✅ |
+| Tuples | ✅ |
+| Records | ✅ |
+| Intersections | ✅ |
+| Recursive / Lazy | ✅ (`$ref`) |
+| Constraints (min, max, pattern) | ✅ |
+| Description / Title | ✅ |
+| Transform / Refine | ⏭️ Skipped |
 
 ### Metadata
 
 #### `getMetadata(schema)`
 
-Extract metadata from a schema.
-
 ```typescript
-function getMetadata<T extends MetadataCapable>(
-  schema: T
-): SchemaMetadata;
-```
-
-```typescript
-const meta = getMetadata(schema);
+const meta = getMetadata(schema)
 // { title?, description?, examples?, default?, deprecated? }
 ```
 
@@ -298,279 +202,284 @@ const meta = getMetadata(schema);
 
 #### `detectVendor(schema)`
 
-Detect which library a schema is from.
-
 ```typescript
-detectVendor(zodSchema);    // 'zod'
-detectVendor(yupSchema);    // 'yup'
-detectVendor(customSchema); // 'anyschema' or 'standard-schema' or null
+detectVendor(zodSchema)    // 'zod'
+detectVendor(valibotSchema) // 'valibot'
 ```
 
-#### Type Guards
+### Type Inference
+
+#### `Infer<T>`
 
 ```typescript
-isZodSchema(schema);        // schema is ZodLike
-isValibotSchema(schema);    // schema is ValibotLike
-isArkTypeSchema(schema);    // schema is ArkTypeLike
-isYupSchema(schema);        // schema is YupLike
-// ... etc
+const schema = z.object({ name: z.string() })
+type User = Infer<typeof schema> // { name: string }
 ```
 
-## Type Inference
-
-### `InferOutput<T>`
-
-Infer the output type from any supported schema.
+#### `InferInput<T>`
 
 ```typescript
-import { z } from 'zod';
-import * as v from 'valibot';
-import { type } from 'arktype';
-
-const zodSchema = z.object({ name: z.string() });
-type A = InferOutput<typeof zodSchema>; // { name: string }
-
-const valibotSchema = v.object({ name: v.string() });
-type B = InferOutput<typeof valibotSchema>; // { name: string }
-
-const arktypeSchema = type({ name: 'string' });
-type C = InferOutput<typeof arktypeSchema>; // { name: string }
+const schema = z.string().transform(s => s.length)
+type Input = InferInput<typeof schema>  // string
+type Output = Infer<typeof schema>      // number
 ```
 
-### `InferInput<T>`
+## Adapter System
 
-Infer the input type (before transforms).
+### Interface
 
-```typescript
-const schema = z.string().transform(s => s.length);
-type Input = InferInput<typeof schema>;   // string
-type Output = InferOutput<typeof schema>; // number
-```
-
-### `IsValidSchema<T>`
-
-Check if a type is a valid schema.
+Every adapter implements this interface:
 
 ```typescript
-type A = IsValidSchema<z.ZodString>;  // true
-type B = IsValidSchema<{ foo: string }>; // false
-```
+interface SchemaAdapter {
+  /** Unique identifier */
+  vendor: string
 
-## Capability Types
+  /** Check if this adapter handles the schema */
+  match(schema: unknown): boolean
 
-AnySchema uses capability types to enforce type safety at compile time:
+  // ============ Type Detection ============
+  isString(schema: unknown): boolean
+  isNumber(schema: unknown): boolean
+  isBoolean(schema: unknown): boolean
+  isNull(schema: unknown): boolean
+  isUndefined(schema: unknown): boolean
+  isObject(schema: unknown): boolean
+  isArray(schema: unknown): boolean
+  isUnion(schema: unknown): boolean
+  isLiteral(schema: unknown): boolean
+  isEnum(schema: unknown): boolean
+  isOptional(schema: unknown): boolean
+  isNullable(schema: unknown): boolean
+  isTuple(schema: unknown): boolean
+  isRecord(schema: unknown): boolean
+  isIntersection(schema: unknown): boolean
+  isLazy(schema: unknown): boolean
 
-```typescript
-// Only schemas that support JSON Schema conversion
-type JsonSchemaCapable = ...;
+  // ============ Unwrap ============
+  /** For optional/nullable/lazy - get inner schema */
+  unwrap(schema: unknown): unknown
 
-// Only schemas that support type inference
-type InferCapable = ...;
+  // ============ Extract ============
+  getObjectEntries(schema: unknown): [string, unknown][]
+  getArrayElement(schema: unknown): unknown
+  getUnionOptions(schema: unknown): unknown[]
+  getLiteralValue(schema: unknown): unknown
+  getEnumValues(schema: unknown): unknown[]
+  getTupleItems(schema: unknown): unknown[]
+  getRecordValue(schema: unknown): unknown
+  getIntersectionSchemas(schema: unknown): unknown[]
 
-// Only schemas that support async validation
-type AsyncCapable = ...;
+  // ============ Constraints ============
+  getConstraints(schema: unknown): {
+    min?: number
+    max?: number
+    minLength?: number
+    maxLength?: number
+    pattern?: string
+    format?: string
+  } | undefined
 
-// Only schemas that have metadata
-type MetadataCapable = ...;
-```
+  // ============ Metadata ============
+  getDescription(schema: unknown): string | undefined
+  getTitle(schema: unknown): string | undefined
+  getDefault(schema: unknown): unknown
+  getExamples(schema: unknown): unknown[] | undefined
 
-Functions use these as constraints:
+  // ============ Validation ============
+  validate(schema: unknown, data: unknown): ValidationResult
+  validateAsync?(schema: unknown, data: unknown): Promise<ValidationResult>
 
-```typescript
-// This function ONLY accepts JsonSchemaCapable schemas
-function toJsonSchema<T extends JsonSchemaCapable>(schema: T): Promise<JSONSchema>;
-
-// Passing a non-capable schema results in a compile-time error!
-```
-
-## AnySchema Protocol
-
-For library authors who want first-class AnySchema support.
-
-### Specification
-
-```typescript
-interface AnySchemaV1<Output = unknown, Input = unknown> {
-  // Required: Identity marker
-  readonly '~anyschema': {
-    readonly version: 1;
-    readonly vendor: string;
-  };
-
-  // Required: Type carriers (compile-time only)
-  readonly '~types': {
-    readonly input: Input;
-    readonly output: Output;
-  };
-
-  // Required: Validation
-  readonly '~validate': (data: unknown) => ValidationResult<Output>;
-
-  // Optional: Async validation
-  readonly '~validateAsync'?: (data: unknown) => Promise<ValidationResult<Output>>;
-
-  // Optional: JSON Schema conversion
-  readonly '~toJsonSchema'?: () => JSONSchema;
-
-  // Optional: Coercion
-  readonly '~coerce'?: (data: unknown) => unknown;
-
-  // Optional: Metadata
-  readonly '~meta'?: {
-    readonly title?: string;
-    readonly description?: string;
-    readonly examples?: readonly unknown[];
-    readonly default?: Output;
-    readonly deprecated?: boolean;
-  };
+  // ============ Type Inference (compile-time) ============
+  /** Type-level output inference */
+  _output: unknown
+  /** Type-level input inference */
+  _input: unknown
 }
 ```
 
-### Creating a Protocol-Compliant Schema
+### Writing an Adapter
+
+Example: Zod v4 adapter (~50 lines)
 
 ```typescript
-import { createSchema } from 'anyschema';
+import { defineAdapter } from '@sylphx/anyschema'
 
-const myStringSchema = createSchema<string>({
-  vendor: 'my-library',
-  validate: (data) => {
-    if (typeof data === 'string') {
-      return { success: true, data };
+export const zodV4Adapter = defineAdapter({
+  vendor: 'zod',
+
+  match: (s) => s != null && typeof s === 'object' && '_zod' in s,
+
+  // Type detection - just check _zod.def.type
+  isString: (s) => s._zod.def.type === 'string',
+  isNumber: (s) => s._zod.def.type === 'number',
+  isBoolean: (s) => s._zod.def.type === 'boolean',
+  isNull: (s) => s._zod.def.type === 'null',
+  isUndefined: (s) => s._zod.def.type === 'undefined',
+  isObject: (s) => s._zod.def.type === 'object',
+  isArray: (s) => s._zod.def.type === 'array',
+  isUnion: (s) => s._zod.def.type === 'union',
+  isLiteral: (s) => s._zod.def.type === 'literal',
+  isEnum: (s) => s._zod.def.type === 'enum',
+  isOptional: (s) => s._zod.def.type === 'optional',
+  isNullable: (s) => s._zod.def.type === 'nullable',
+  isTuple: (s) => s._zod.def.type === 'tuple',
+  isRecord: (s) => s._zod.def.type === 'record',
+  isIntersection: (s) => s._zod.def.type === 'intersection',
+  isLazy: (s) => s._zod.def.type === 'lazy',
+
+  // Unwrap
+  unwrap: (s) => s._zod.def.innerType ?? s._zod.def.schema?.(),
+
+  // Extract
+  getObjectEntries: (s) => Object.entries(s._zod.def.shape ?? {}),
+  getArrayElement: (s) => s._zod.def.element,
+  getUnionOptions: (s) => s._zod.def.options ?? [],
+  getLiteralValue: (s) => s._zod.def.value,
+  getEnumValues: (s) => s._zod.def.values ?? [],
+  getTupleItems: (s) => s._zod.def.items ?? [],
+  getRecordValue: (s) => s._zod.def.valueType,
+  getIntersectionSchemas: (s) => [s._zod.def.left, s._zod.def.right],
+
+  // Constraints
+  getConstraints: (s) => {
+    const checks = s._zod.def.checks ?? []
+    const result: any = {}
+    for (const c of checks) {
+      if (c.kind === 'min') result.min = c.value
+      if (c.kind === 'max') result.max = c.value
+      // ...
     }
+    return Object.keys(result).length ? result : undefined
+  },
+
+  // Metadata
+  getDescription: (s) => s.description,
+  getTitle: (s) => undefined, // Zod doesn't have title
+  getDefault: (s) => s._zod.def.defaultValue?.(),
+  getExamples: (s) => undefined,
+
+  // Validation
+  validate: (s, data) => {
+    const result = s.safeParse(data)
+    if (result.success) return { success: true, data: result.data }
     return {
       success: false,
-      issues: [{ message: 'Expected string' }]
-    };
+      issues: result.error.issues.map(i => ({
+        message: i.message,
+        path: i.path,
+      }))
+    }
   },
-  toJsonSchema: () => ({ type: 'string' }),
-  meta: {
-    title: 'String',
-    description: 'A string value',
-  },
-});
+})
+```
+
+### Registering Custom Adapters
+
+```typescript
+import { registerAdapter } from '@sylphx/anyschema'
+import { myAdapter } from './my-adapter'
+
+registerAdapter(myAdapter)
 
 // Now works with all AnySchema functions
-validate(myStringSchema, 'hello');  // ✓
-toJsonSchema(myStringSchema);       // ✓
-type Output = InferOutput<typeof myStringSchema>; // string
+validate(mySchema, data)
+toJsonSchema(mySchema)
 ```
 
-## Standard Schema Compatibility
+## How It Works
 
-AnySchema is a **superset** of [Standard Schema](https://github.com/standard-schema/standard-schema). Any library implementing Standard Schema automatically works with AnySchema:
+### JSON Schema Generation (Zero Deps)
 
 ```typescript
-// If a library implements Standard Schema...
-const schema = {
-  '~standard': {
-    version: 1,
-    vendor: 'my-lib',
-    validate: (data) => ({ value: data }),
+// Core transformer - uses adapters
+function toJsonSchema(schema: unknown): JSONSchema {
+  const adapter = findAdapter(schema)
+
+  if (adapter.isString(schema)) {
+    return {
+      type: 'string',
+      description: adapter.getDescription(schema),
+      ...adapter.getConstraints(schema),
+    }
   }
-};
 
-// ...it works with AnySchema!
-validate(schema, data); // ✓
-```
+  if (adapter.isObject(schema)) {
+    const entries = adapter.getObjectEntries(schema)
+    return {
+      type: 'object',
+      properties: Object.fromEntries(
+        entries.map(([k, v]) => [k, toJsonSchema(v)])
+      ),
+      required: entries
+        .filter(([_, v]) => !adapter.isOptional(v))
+        .map(([k]) => k),
+    }
+  }
 
-AnySchema extends Standard Schema with:
-- JSON Schema conversion
-- Metadata extraction
-- Coercion support
-- More type utilities
+  if (adapter.isArray(schema)) {
+    return {
+      type: 'array',
+      items: toJsonSchema(adapter.getArrayElement(schema)),
+    }
+  }
 
-## Detection Priority
-
-AnySchema detects schemas in this order:
-
-1. **AnySchema Protocol** (`~anyschema`) — Our protocol, highest priority
-2. **Standard Schema** (`~standard`) — Community standard
-3. **Duck Typing** — Fallback for all other libraries
-
-```typescript
-function detectSchema(schema: unknown) {
-  // 1. AnySchema Protocol
-  if ('~anyschema' in schema) return 'anyschema';
-
-  // 2. Standard Schema
-  if ('~standard' in schema) return 'standard-schema';
-
-  // 3. Duck typing
-  if (isZodLike(schema)) return 'zod';
-  if (isValibotLike(schema)) return 'valibot';
   // ... etc
 }
 ```
 
-## Tree Shaking
-
-AnySchema uses dynamic imports for JSON Schema converters:
+### Validation
 
 ```typescript
-// Only loads zod-to-json-schema when you actually use it
-const jsonSchema = await toJsonSchema(zodSchema);
-```
-
-This means your bundle only includes the code you use.
-
-## Error Handling
-
-### ValidationResult
-
-```typescript
-type ValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; issues: ValidationIssue[] };
-
-interface ValidationIssue {
-  message: string;
-  path?: (string | number)[];
+function validate(schema: unknown, data: unknown) {
+  const adapter = findAdapter(schema)
+  return adapter.validate(schema, data)
 }
 ```
 
-### ValidationError
-
-Thrown by `parse()` and `assert()`:
+### Type Inference
 
 ```typescript
-class ValidationError extends Error {
-  issues: ValidationIssue[];
-}
+// Compile-time only - uses conditional types
+type Infer<T> =
+  T extends { _zod: any } ? T['_zod']['~output'] :
+  T extends { types: { output: infer O } } ? O :  // Valibot
+  T extends { infer: infer O } ? O :              // ArkType
+  never
 ```
 
 ## Comparison
 
+### vs Direct Library Usage
+
+| | Direct | AnySchema |
+|--|--------|-----------|
+| Type safety | ✅ | ✅ |
+| Library lock-in | ✅ | ❌ |
+| Mix libraries | ❌ | ✅ |
+| JSON Schema | Library-specific | Universal |
+| Bundle size | Varies | ~5KB + adapters |
+
 ### vs Standard Schema
 
-| Feature | Standard Schema | AnySchema |
-|---------|-----------------|-----------|
+| | Standard Schema | AnySchema |
+|--|-----------------|-----------|
 | Validation | ✅ | ✅ |
 | Type inference | ✅ | ✅ |
 | JSON Schema | ❌ | ✅ |
-| Metadata | ❌ | ✅ |
-| Coercion | ❌ | ✅ |
-| Duck typing fallback | ❌ | ✅ |
-| Compile-time capability checks | ❌ | ✅ |
-| Adoption | Growing | — |
-
-### vs Direct Library Usage
-
-| Feature | Direct | AnySchema |
-|---------|--------|-----------|
-| Type safety | ✅ | ✅ |
-| Library lock-in | ✅ | ❌ |
-| Universal API | ❌ | ✅ |
-| Mix libraries | ❌ | ✅ |
-| JSON Schema (universal) | ❌ | ✅ |
+| Duck typing | ❌ | ✅ |
+| Extensible | ❌ | ✅ (adapters) |
 
 ## Contributing
 
-Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md).
+Want to add support for a new library? Just write an adapter!
+
+1. Implement the `SchemaAdapter` interface
+2. Add tests
+3. Submit PR
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
 
 ## License
 
 MIT © AnySchema Contributors
-
-## Powered by Sylphx
-
-Built with [@sylphx/doctor](https://github.com/SylphxAI/doctor) for project health checks and standards enforcement.

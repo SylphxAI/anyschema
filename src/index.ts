@@ -1092,11 +1092,11 @@ function getMetadataByVendor(vendor: SchemaVendor, schema: unknown): SchemaMetad
 			return result
 		}
 		case 'effect': {
-			const annotations = (schema as { annotations?: Record<string, unknown> }).annotations
+			const annotations = (schema as { annotations?: { title?: string; description?: string } })
+				.annotations
 			const result: { title?: string; description?: string } = {}
 			if (annotations) {
-				const title = annotations['title']
-				const description = annotations['description']
+				const { title, description } = annotations
 				if (typeof title === 'string') result.title = title
 				if (typeof description === 'string') result.description = description
 			}

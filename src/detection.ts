@@ -42,7 +42,7 @@ export function detect(schema: unknown): DetectionResult | null {
 		// ArkType: callable with toJsonSchema method
 		if (
 			'toJsonSchema' in schema &&
-			typeof (schema as Record<string, unknown>)['toJsonSchema'] === 'function'
+			typeof (schema as { toJsonSchema?: unknown }).toJsonSchema === 'function'
 		) {
 			return { type: 'duck', vendor: 'arktype' }
 		}
@@ -60,7 +60,7 @@ export function detect(schema: unknown): DetectionResult | null {
 	if (
 		'_def' in schema &&
 		'parse' in schema &&
-		typeof (schema as Record<string, unknown>)['parse'] === 'function'
+		typeof (schema as { parse?: unknown }).parse === 'function'
 	) {
 		return { type: 'duck', vendor: 'zod' }
 	}
@@ -73,7 +73,7 @@ export function detect(schema: unknown): DetectionResult | null {
 	// Yup: has __isYupSchema__ marker
 	if (
 		'__isYupSchema__' in schema &&
-		(schema as Record<string, unknown>)['__isYupSchema__'] === true
+		(schema as { __isYupSchema__?: unknown }).__isYupSchema__ === true
 	) {
 		return { type: 'duck', vendor: 'yup' }
 	}
