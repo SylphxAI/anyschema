@@ -119,7 +119,9 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 	schema: unknown,
 	ctx: TransformContext<TAdapters>
 ): JSONSchema {
-	const adapter = ctx.adapters.find((a) => a.match(schema)) as TransformerAdapter<unknown> | undefined
+	const adapter = ctx.adapters.find((a) => a.match(schema)) as
+		| TransformerAdapter<unknown>
+		| undefined
 	if (!adapter) {
 		throw new Error(`No adapter found for schema: ${typeof schema}`)
 	}

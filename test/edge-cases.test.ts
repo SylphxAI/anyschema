@@ -21,7 +21,7 @@ import {
 	ValidationError,
 	validate,
 	validateAsync,
-} from '../src/index.js'
+} from '../src/all.js'
 
 // ============================================================================
 // Null and Undefined Handling

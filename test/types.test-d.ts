@@ -2,6 +2,16 @@ import { type } from 'arktype'
 import * as v from 'valibot'
 import { describe, expectTypeOf, it } from 'vitest'
 import { z } from 'zod'
+import type {
+	AnySchema,
+	AnySchemaV1,
+	InferInput,
+	InferOutput,
+	IsValidSchema,
+	JSONSchema,
+	StandardSchemaV1,
+	ValidationResult,
+} from '../src/all.js'
 import {
 	assert,
 	createSchema,
@@ -12,17 +22,7 @@ import {
 	toJsonSchemaSync,
 	validate,
 	validateAsync,
-} from '../src/index.js'
-import type {
-	AnySchema,
-	AnySchemaV1,
-	InferInput,
-	InferOutput,
-	IsValidSchema,
-	JSONSchema,
-	StandardSchemaV1,
-	ValidationResult,
-} from '../src/types.js'
+} from '../src/all.js'
 
 describe('InferOutput type', () => {
 	it('should infer Zod output type', () => {

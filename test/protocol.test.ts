@@ -20,7 +20,7 @@ import {
 	type ValidationResult,
 	validate,
 	validateAsync,
-} from '../src/index.js'
+} from '../src/all.js'
 
 // ============================================================================
 // AnySchema Protocol v1 Tests

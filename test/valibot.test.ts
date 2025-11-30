@@ -21,7 +21,7 @@ import {
 	toJsonSchemaSync,
 	ValidationError,
 	validate,
-} from '../src/index.js'
+} from '../src/all.js'
 
 // ============================================================================
 // Primitive Types

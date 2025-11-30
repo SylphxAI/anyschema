@@ -23,7 +23,7 @@ import {
 	validate,
 	validateAny,
 	validateAsync,
-} from '../src/index.js'
+} from '../src/all.js'
 
 describe('toJsonSchema (async)', () => {
 	it('should convert Zod schema', async () => {

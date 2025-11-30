@@ -22,7 +22,7 @@ import {
 	ValidationError,
 	validate,
 	validateAsync,
-} from '../src/index.js'
+} from '../src/all.js'
 
 // ============================================================================
 // Primitive Types

@@ -24,7 +24,7 @@ import {
 	isZodSchema,
 	supportsAsync,
 	supportsJsonSchema,
-} from '../src/index.js'
+} from '../src/all.js'
 
 // ============================================================================
 // Mock Schema Factories
