@@ -5,11 +5,11 @@
  * Supports all major schema libraries via duck typing.
  */
 
+export type { Transformer, TransformerOptions } from './createTransformer.js'
+export { createTransformer } from './createTransformer.js'
 // Factory functions (separate files for tree-shaking)
 export type { Validator, ValidatorOptions } from './createValidator.js'
 export { createValidator } from './createValidator.js'
-export type { Transformer, TransformerOptions } from './createTransformer.js'
-export { createTransformer } from './createTransformer.js'
 // Composable helpers
 export {
 	isJsonSchema,
@@ -37,8 +37,8 @@ export type {
 } from './types.js'
 export { defineAdapter, findAdapter, getAdapters, registerAdapter } from './types.js'
 
-// Built-in adapters (auto-registers)
-import './adapters/index.js'
+// Register all adapters (side-effect import for backwards compatibility)
+// import './register-all.js'  // Uncomment if you want auto-registration
 
 // Export schema types for type-safe usage
 export type { ArkTypeSchema } from './adapters/arktype.js'
