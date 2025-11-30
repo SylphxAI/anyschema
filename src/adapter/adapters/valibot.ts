@@ -5,6 +5,7 @@
  * Detects via `kind: 'schema'` property.
  */
 
+import { withValibotRun, withValibotRunAsync } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
 // Type helpers
@@ -295,74 +296,9 @@ export const valibotAdapter = defineAdapter({
 	isDeprecated: () => false, // Valibot doesn't have deprecated
 
 	// ============ Validation ============
-	validate: (s, data) => {
-		// Valibot uses safeParse from the module, not on the schema
-		// We need to duck-type call ~run directly
-		const schema = s as {
-			'~run'?: (
-				dataset: { typed: boolean; value: unknown },
-				config: unknown
-			) => {
-				typed: boolean
-				value: unknown
-				issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
-			}
-		}
-		if (typeof schema['~run'] !== 'function') {
-			return { success: false, issues: [{ message: 'Schema does not have ~run method' }] }
-		}
-
-		const dataset = { typed: false, value: data }
-		const result = schema['~run'](dataset, {})
-
-		if (result.issues && result.issues.length > 0) {
-			return {
-				success: false,
-				issues: result.issues.map((i) => ({
-					message: i.message,
-					...(i.path ? { path: i.path.map((p) => p.key) } : {}),
-				})),
-			}
-		}
-
-		return { success: true, data: result.value }
-	},
-
-	validateAsync: async (s, data) => {
-		// Same as sync for now - Valibot's ~run handles async internally
-		const schema = s as {
-			'~run'?: (
-				dataset: { typed: boolean; value: unknown },
-				config: unknown
-			) =>
-				| {
-						typed: boolean
-						value: unknown
-						issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
-				  }
-				| Promise<{
-						typed: boolean
-						value: unknown
-						issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
-				  }>
-		}
-		if (typeof schema['~run'] !== 'function') {
-			return { success: false, issues: [{ message: 'Schema does not have ~run method' }] }
-		}
-
-		const dataset = { typed: false, value: data }
-		const result = await schema['~run'](dataset, {})
-
-		if (result.issues && result.issues.length > 0) {
-			return {
-				success: false,
-				issues: result.issues.map((i) => ({
-					message: i.message,
-					...(i.path ? { path: i.path.map((p) => p.key) } : {}),
-				})),
-			}
-		}
-
-		return { success: true, data: result.value }
-	},
+	validate: (s, data) =>
+		withValibotRun(s, data) ?? { success: false, issues: [{ message: 'Invalid Valibot schema' }] },
+	validateAsync: async (s, data) =>
+		(await withValibotRunAsync(s, data)) ??
+		withValibotRun(s, data) ?? { success: false, issues: [{ message: 'Invalid Valibot schema' }] },
 })

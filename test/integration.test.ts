@@ -57,7 +57,7 @@ describe('toJsonSchema (async)', () => {
 	})
 
 	it('should throw for unsupported schema', async () => {
-		await expect(toJsonSchema({} as any)).rejects.toThrow('Unsupported schema type')
+		await expect(toJsonSchema({} as any)).rejects.toThrow('No adapter found')
 	})
 })
 

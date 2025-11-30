@@ -5,6 +5,7 @@
  * Detects via `internal` property with `kind` and `json`.
  */
 
+import { withCallable } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
 // Type helpers for ArkType's internal JSON representation
@@ -325,55 +326,10 @@ export const arktypeAdapter = defineAdapter({
 	isDeprecated: () => false,
 
 	// ============ Validation ============
-	validate: (s, data) => {
-		const schema = s as { (data: unknown): unknown; t?: unknown }
-		if (typeof schema !== 'function') {
-			return { success: false, issues: [{ message: 'Schema is not callable' }] }
-		}
-
-		try {
-			const result = schema(data)
-			// ArkType returns the data on success, or an error object
-			if (result && typeof result === 'object' && 'problems' in result) {
-				const error = result as { problems: Array<{ message: string; path?: string[] }> }
-				return {
-					success: false,
-					issues: error.problems.map((p) => ({
-						message: p.message,
-						...(p.path ? { path: p.path } : {}),
-					})),
-				}
-			}
-			return { success: true, data: result }
-		} catch (e) {
-			return { success: false, issues: [{ message: String(e) }] }
-		}
-	},
-
-	validateAsync: async (s, data) => {
-		// ArkType validation is sync
-		const schema = s as (data: unknown) => unknown
-		if (typeof schema !== 'function') {
-			return { success: false, issues: [{ message: 'Schema is not callable' }] }
-		}
-
-		try {
-			const result = schema(data)
-			if (result && typeof result === 'object' && 'problems' in result) {
-				const error = result as { problems: Array<{ message: string; path?: string[] }> }
-				return {
-					success: false,
-					issues: error.problems.map((p) => ({
-						message: p.message,
-						...(p.path ? { path: p.path } : {}),
-					})),
-				}
-			}
-			return { success: true, data: result }
-		} catch (e) {
-			return { success: false, issues: [{ message: String(e) }] }
-		}
-	},
+	validate: (s, data) =>
+		withCallable(s, data) ?? { success: false, issues: [{ message: 'Invalid ArkType schema' }] },
+	validateAsync: async (s, data) =>
+		withCallable(s, data) ?? { success: false, issues: [{ message: 'Invalid ArkType schema' }] },
 })
 
 // Custom transformer for ArkType since it uses json property directly

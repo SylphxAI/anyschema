@@ -32,6 +32,14 @@
  * ```
  */
 
+// Re-export adapter system
+export {
+	defineAdapter,
+	findAdapter,
+	getAdapters,
+	registerAdapter,
+	toJsonSchema as adapterToJsonSchema,
+} from './adapter/index.js'
 // Re-export detection utilities
 export {
 	detect,
@@ -55,7 +63,6 @@ export {
 // Re-export all types
 export type {
 	AnySchema,
-	// Protocol types
 	AnySchemaV1,
 	ArkTypeLike,
 	AssertValidSchema,
@@ -64,21 +71,16 @@ export type {
 	EffectSchemaLike,
 	InferCapable,
 	InferInput,
-	// Type inference
 	InferOutput,
 	IoTsLike,
 	IsValidSchema,
 	JoiLike,
-	// JSON Schema
 	JSONSchema,
-	// Capability types
 	JsonSchemaCapable,
 	JsonSchemaSyncCapable,
 	MetadataCapable,
 	RuntypesLike,
-	// Metadata
 	SchemaMetadata,
-	// Vendor
 	SchemaVendor,
 	StandardSchemaV1,
 	SuperstructLike,
@@ -86,20 +88,17 @@ export type {
 	ValibotLike,
 	ValidationFailure,
 	ValidationIssue,
-	// Validation
 	ValidationResult,
 	ValidationSuccess,
 	YupLike,
-	// Schema structure types
 	ZodLike,
 } from './types.js'
 // Re-export error class
 export { ValidationError } from './types.js'
 
-import { toJsonSchema as adapterToJsonSchema } from './adapter/index.js'
-import { tryToJsonSchema, tryValidate, tryValidateAsync } from './blind-call.js'
-import { detect, isAnySchemaProtocol, isStandardSchema } from './detection.js'
-// Import for internal use
+import { isJsonSchema, tryNativeToJsonSchema } from './adapter/helpers.js'
+import { toJsonSchema as adapterToJsonSchema, findAdapter } from './adapter/index.js'
+import { isAnySchemaProtocol, isStandardSchema } from './detection.js'
 import type {
 	AnySchemaV1,
 	InferCapable,
@@ -109,7 +108,6 @@ import type {
 	JsonSchemaSyncCapable,
 	MetadataCapable,
 	SchemaMetadata,
-	SchemaVendor,
 	ValidationResult,
 } from './types.js'
 import { ValidationError } from './types.js'
@@ -121,8 +119,10 @@ import { ValidationError } from './types.js'
 /**
  * Validate data against any supported schema
  *
- * Uses duck typing to detect schema type and call appropriate validation method.
- * Returns a unified result object with success/failure status.
+ * Strategy:
+ * 1. AnySchema Protocol (~anyschema) - direct call
+ * 2. Standard Schema (~standard) - normalize result
+ * 3. Adapter-based validation - find adapter, call validate
  *
  * @param schema - Any supported schema (must support type inference)
  * @param data - Data to validate
@@ -156,20 +156,16 @@ export function validate(schema: unknown, data: unknown): ValidationResult<unkno
 		return normalizeStandardSchemaResult(result)
 	}
 
-	// 3. Blind-call: try native methods first (most efficient)
-	const blindResult = tryValidate(schema, data)
-	if (blindResult) return blindResult
-
-	// 4. Fallback: vendor-specific (for edge cases)
-	const detection = detect(schema)
-	if (!detection) {
-		return {
-			success: false,
-			issues: [{ message: 'Unsupported schema type' }],
-		}
+	// 3. Adapter-based validation
+	const adapter = findAdapter(schema)
+	if (adapter) {
+		return adapter.validate(schema, data)
 	}
 
-	return validateByVendor(detection.vendor as SchemaVendor, schema, data)
+	return {
+		success: false,
+		issues: [{ message: 'Unsupported schema type' }],
+	}
 }
 
 /**
@@ -209,25 +205,19 @@ export async function validateAsync(
 		return normalizeStandardSchemaResult(result)
 	}
 
-	// 3. Blind-call: try native async methods first
-	const blindResult = await tryValidateAsync(schema, data)
-	if (blindResult) return blindResult
-
-	// 4. Fallback: vendor-specific
-	const detection = detect(schema)
-	if (!detection) {
-		return {
-			success: false,
-			issues: [{ message: 'Unsupported schema type' }],
+	// 3. Adapter-based validation (async)
+	const adapter = findAdapter(schema)
+	if (adapter) {
+		if (adapter.validateAsync) {
+			return adapter.validateAsync(schema, data)
 		}
+		return adapter.validate(schema, data)
 	}
 
-	// For Valibot async schemas, use safeParseAsync
-	if (detection.vendor === 'valibot' && isAsyncSchema(schema)) {
-		return validateValibotAsync(schema, data)
+	return {
+		success: false,
+		issues: [{ message: 'Unsupported schema type' }],
 	}
-
-	return validateByVendor(detection.vendor as SchemaVendor, schema, data)
 }
 
 // ============================================================================
@@ -326,18 +316,16 @@ export async function parseAsync<T extends InferCapable>(
 /**
  * Convert any supported schema to JSON Schema (async)
  *
- * Automatically detects schema type and uses appropriate converter.
- * Uses dynamic import to load converters from user's installed packages.
+ * Strategy:
+ * 1. Try native toJsonSchema() method (ArkType, AnySchema Protocol)
+ * 2. Check if schema IS JSON Schema (TypeBox)
+ * 3. Build via adapter transformer
  *
  * **Fully supported (no extra deps):**
- * - Zod v4: Built-in toJSONSchema()
+ * - Zod v3/v4: Via adapter
+ * - Valibot: Via adapter
  * - ArkType: Built-in toJsonSchema() method
  * - TypeBox: Schema IS JSON Schema
- *
- * **Requires extra package:**
- * - Zod v3: Requires `zod-to-json-schema`
- * - Valibot: Requires `@valibot/to-json-schema`
- * - Effect: Requires `@effect/schema`
  *
  * @param schema - Any supported schema with JSON Schema capability
  * @returns Promise resolving to JSON Schema
@@ -349,58 +337,41 @@ export async function parseAsync<T extends InferCapable>(
  */
 export async function toJsonSchema<T extends JsonSchemaCapable>(schema: T): Promise<JSONSchema>
 export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
-	// 1. Blind-call: try native methods first (most efficient)
-	const native = tryToJsonSchema(schema)
-	if (native) return native
+	// 1. Try native toJsonSchema method (ArkType, AnySchema Protocol)
+	const native = tryNativeToJsonSchema(schema)
+	if (native) return native as JSONSchema
 
-	// 2. Try adapter-based transformer (handles Zod v3/v4, Valibot, ArkType)
-	try {
-		return adapterToJsonSchema(schema)
-	} catch {
-		// Adapter not found, continue to vendor-specific
+	// 2. Check if schema IS JSON Schema (TypeBox)
+	if (isJsonSchema(schema)) {
+		return schema as JSONSchema
 	}
 
-	// 3. Fallback: vendor-specific error messages
-	const detection = detect(schema)
-	if (!detection) {
-		throw new Error('Unsupported schema type. Expected a schema with JSON Schema support.')
-	}
-
-	return toJsonSchemaByVendor(detection.vendor as SchemaVendor, schema)
+	// 3. Build via adapter transformer
+	return adapterToJsonSchema(schema)
 }
 
 /**
  * Sync version of toJsonSchema
  *
- * **Limitations:**
- * - Zod v4: NOT supported (requires async). Use toJsonSchema() instead.
- * - Zod v3: Requires `zod-to-json-schema` package installed.
- * - Valibot: Requires `@valibot/to-json-schema` package installed.
- *
  * **Fully supported (no extra deps):**
+ * - Zod v3/v4: Via adapter
+ * - Valibot: Via adapter
  * - ArkType: Built-in toJsonSchema() method
  * - TypeBox: Schema IS JSON Schema
  */
 export function toJsonSchemaSync<T extends JsonSchemaSyncCapable>(schema: T): JSONSchema
 export function toJsonSchemaSync(schema: unknown): JSONSchema {
-	// 1. Blind-call: try native methods first
-	const native = tryToJsonSchema(schema)
-	if (native) return native
+	// 1. Try native toJsonSchema method
+	const native = tryNativeToJsonSchema(schema)
+	if (native) return native as JSONSchema
 
-	// 2. Try adapter-based transformer (handles Zod v3/v4, Valibot, ArkType)
-	try {
-		return adapterToJsonSchema(schema)
-	} catch {
-		// Adapter not found, continue to vendor-specific
+	// 2. Check if schema IS JSON Schema (TypeBox)
+	if (isJsonSchema(schema)) {
+		return schema as JSONSchema
 	}
 
-	// 3. Fallback: vendor-specific error messages
-	const detection = detect(schema)
-	if (!detection) {
-		throw new Error('Unsupported schema type. Expected a schema with JSON Schema support.')
-	}
-
-	return toJsonSchemaSyncByVendor(detection.vendor as SchemaVendor, schema)
+	// 3. Build via adapter transformer
+	return adapterToJsonSchema(schema)
 }
 
 // ============================================================================
@@ -425,12 +396,25 @@ export function getMetadata<T extends MetadataCapable>(schema: T): SchemaMetadat
 		return (schema as { '~meta': SchemaMetadata })['~meta'] ?? {}
 	}
 
-	const detection = detect(schema)
-	if (!detection) {
-		return {}
+	// 2. Adapter-based metadata extraction
+	const adapter = findAdapter(schema)
+	if (adapter) {
+		const description = adapter.getDescription(schema)
+		const title = adapter.getTitle(schema)
+		const defaultValue = adapter.getDefault(schema)
+		const examples = adapter.getExamples(schema)
+		const deprecated = adapter.isDeprecated(schema)
+
+		return {
+			...(description ? { description } : {}),
+			...(title ? { title } : {}),
+			...(defaultValue !== undefined ? { default: defaultValue } : {}),
+			...(examples ? { examples } : {}),
+			...(deprecated ? { deprecated } : {}),
+		}
 	}
 
-	return getMetadataByVendor(detection.vendor as SchemaVendor, schema)
+	return {}
 }
 
 // ============================================================================
@@ -521,27 +505,6 @@ export function createSchema<Output, Input = Output>(
 // ============================================================================
 
 /**
- * Check if schema is async (Valibot)
- */
-function isAsyncSchema(schema: unknown): boolean {
-	return (
-		typeof schema === 'object' &&
-		schema !== null &&
-		'async' in schema &&
-		(schema as { async: boolean }).async === true
-	)
-}
-
-/**
- * Check if object/function has a method
- */
-function hasMethod(obj: unknown, method: string): boolean {
-	if (obj === null || obj === undefined) return false
-	if (typeof obj !== 'object' && typeof obj !== 'function') return false
-	return method in obj && typeof (obj as Record<string, unknown>)[method] === 'function'
-}
-
-/**
  * Normalize Standard Schema result to ValidationResult
  */
 function normalizeStandardSchemaResult(result: unknown): ValidationResult<unknown> {
@@ -571,500 +534,4 @@ function normalizeStandardSchemaResult(result: unknown): ValidationResult<unknow
 	}
 
 	return { success: true, data: r.value }
-}
-
-/**
- * Validate by vendor - runtime duck typing
- */
-function validateByVendor(
-	vendor: SchemaVendor,
-	schema: unknown,
-	data: unknown
-): ValidationResult<unknown> {
-	switch (vendor) {
-		case 'zod':
-			return validateZod(schema, data)
-		case 'valibot':
-			return validateValibot(schema, data)
-		case 'arktype':
-			return validateArkType(schema, data)
-		case 'yup':
-			return validateYup(schema, data)
-		case 'joi':
-			return validateJoi(schema, data)
-		case 'io-ts':
-			return validateIoTs(schema, data)
-		case 'superstruct':
-			return validateSuperstruct(schema, data)
-		case 'typebox':
-			return validateTypeBox(schema, data)
-		case 'effect':
-			return validateEffect(schema, data)
-		case 'runtypes':
-			return validateRuntypes(schema, data)
-		default:
-			return { success: false, issues: [{ message: `Unsupported vendor: ${vendor}` }] }
-	}
-}
-
-/**
- * Zod validation - pure duck typing
- */
-function validateZod(schema: unknown, data: unknown): ValidationResult<unknown> {
-	if (!hasMethod(schema, 'safeParse')) {
-		return { success: false, issues: [{ message: 'Invalid Zod schema' }] }
-	}
-
-	const result = (schema as { safeParse: (d: unknown) => unknown }).safeParse(data) as {
-		success: boolean
-		data?: unknown
-		error?: { issues: Array<{ message: string; path: unknown[] }> }
-	}
-
-	if (result.success) {
-		return { success: true, data: result.data }
-	}
-
-	return {
-		success: false,
-		issues: (result.error?.issues ?? []).map((issue) => ({
-			message: issue.message,
-			path: issue.path as (string | number)[],
-		})),
-	}
-}
-
-/**
- * Valibot validation - pure duck typing via ~run
- */
-function validateValibot(schema: unknown, data: unknown): ValidationResult<unknown> {
-	// Valibot schemas have ~run method
-	const s = schema as {
-		'~run'?: (
-			dataset: { typed: boolean; value: unknown },
-			config: unknown
-		) => {
-			typed: boolean
-			value: unknown
-			issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
-		}
-	}
-
-	if (typeof s['~run'] !== 'function') {
-		return { success: false, issues: [{ message: 'Invalid Valibot schema' }] }
-	}
-
-	const result = s['~run']({ typed: false, value: data }, {})
-
-	if (!result.issues || result.issues.length === 0) {
-		return { success: true, data: result.value }
-	}
-
-	return {
-		success: false,
-		issues: result.issues.map((issue) => {
-			const base: { message: string; path?: (string | number)[] } = {
-				message: issue.message,
-			}
-			if (issue.path) {
-				base.path = issue.path.map((p) => p.key)
-			}
-			return base
-		}),
-	}
-}
-
-/**
- * Valibot async validation - pure duck typing via ~run (may return promise)
- */
-async function validateValibotAsync(
-	schema: unknown,
-	data: unknown
-): Promise<ValidationResult<unknown>> {
-	// Valibot schemas have ~run method that may return a promise for async schemas
-	const s = schema as {
-		'~run'?: (
-			dataset: { typed: boolean; value: unknown },
-			config: unknown
-		) => Promise<{
-			typed: boolean
-			value: unknown
-			issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
-		}>
-	}
-
-	if (typeof s['~run'] !== 'function') {
-		return { success: false, issues: [{ message: 'Invalid Valibot schema' }] }
-	}
-
-	const result = await s['~run']({ typed: false, value: data }, {})
-
-	if (!result.issues || result.issues.length === 0) {
-		return { success: true, data: result.value }
-	}
-
-	return {
-		success: false,
-		issues: result.issues.map((issue) => {
-			const base: { message: string; path?: (string | number)[] } = {
-				message: issue.message,
-			}
-			if (issue.path) {
-				base.path = issue.path.map((p) => p.key)
-			}
-			return base
-		}),
-	}
-}
-
-/**
- * ArkType validation - pure duck typing
- */
-function validateArkType(schema: unknown, data: unknown): ValidationResult<unknown> {
-	if (typeof schema !== 'function') {
-		return { success: false, issues: [{ message: 'Invalid ArkType schema' }] }
-	}
-
-	const result = (schema as (d: unknown) => unknown)(data)
-
-	// ArkType returns ArkErrors on failure (iterable with summary)
-	if (
-		result !== null &&
-		typeof result === 'object' &&
-		Symbol.iterator in result &&
-		'summary' in result
-	) {
-		return {
-			success: false,
-			issues: [...(result as Iterable<{ message: string; path: unknown }>)].map((error) => ({
-				message: error.message,
-				path: error.path as unknown as (string | number)[],
-			})),
-		}
-	}
-
-	return { success: true, data: result }
-}
-
-/**
- * Yup validation - pure duck typing
- */
-function validateYup(schema: unknown, data: unknown): ValidationResult<unknown> {
-	if (!hasMethod(schema, 'validateSync')) {
-		return { success: false, issues: [{ message: 'Invalid Yup schema' }] }
-	}
-
-	try {
-		const result = (schema as { validateSync: (d: unknown) => unknown }).validateSync(data)
-		return { success: true, data: result }
-	} catch (error) {
-		const yupError = error as { errors?: string[]; path?: string }
-		return {
-			success: false,
-			issues: (yupError.errors ?? ['Validation failed']).map((msg) => {
-				const base: { message: string; path?: (string | number)[] } = { message: msg }
-				if (yupError.path) {
-					base.path = [yupError.path]
-				}
-				return base
-			}),
-		}
-	}
-}
-
-/**
- * Joi validation - pure duck typing
- */
-function validateJoi(schema: unknown, data: unknown): ValidationResult<unknown> {
-	if (!hasMethod(schema, 'validate')) {
-		return { success: false, issues: [{ message: 'Invalid Joi schema' }] }
-	}
-
-	const result = (
-		schema as { validate: (d: unknown) => { error?: unknown; value: unknown } }
-	).validate(data)
-
-	if (result.error) {
-		const joiError = result.error as {
-			details?: Array<{ message: string; path: (string | number)[] }>
-		}
-		return {
-			success: false,
-			issues: (joiError.details ?? []).map((detail) => ({
-				message: detail.message,
-				path: detail.path,
-			})),
-		}
-	}
-
-	return { success: true, data: result.value }
-}
-
-/**
- * io-ts validation - pure duck typing
- */
-function validateIoTs(schema: unknown, data: unknown): ValidationResult<unknown> {
-	if (!hasMethod(schema, 'decode')) {
-		return { success: false, issues: [{ message: 'Invalid io-ts schema' }] }
-	}
-
-	const result = (schema as { decode: (d: unknown) => unknown }).decode(data)
-
-	// io-ts returns Either<Errors, A>
-	const either = result as { _tag: string; left?: unknown; right?: unknown }
-
-	if (either._tag === 'Right') {
-		return { success: true, data: either.right }
-	}
-
-	// Handle Left (errors)
-	const errors = either.left as
-		| Array<{ message?: string; context?: Array<{ key: string }> }>
-		| undefined
-	return {
-		success: false,
-		issues: (errors ?? []).map((e) => {
-			const base: { message: string; path?: (string | number)[] } = {
-				message: e.message ?? 'Validation failed',
-			}
-			if (e.context && e.context.length > 0) {
-				base.path = e.context.map((c) => c.key)
-			}
-			return base
-		}),
-	}
-}
-
-/**
- * Superstruct validation - pure duck typing
- * Superstruct schemas are callable and have validate method
- */
-function validateSuperstruct(schema: unknown, data: unknown): ValidationResult<unknown> {
-	// Superstruct schemas have validate method on the struct
-	const s = schema as {
-		validate?: (
-			value: unknown,
-			options?: unknown
-		) => [{ failures: () => Array<{ message: string; path: (string | number)[] }> } | null, unknown]
-	}
-
-	if (typeof s.validate !== 'function') {
-		return { success: false, issues: [{ message: 'Invalid Superstruct schema' }] }
-	}
-
-	const [error, value] = s.validate(data)
-
-	if (error) {
-		const failures = error.failures?.() ?? []
-		return {
-			success: false,
-			issues: failures.map((f) => ({
-				message: f.message,
-				path: f.path,
-			})),
-		}
-	}
-
-	return { success: true, data: value }
-}
-
-/**
- * TypeBox validation - pure duck typing
- * TypeBox schemas are JSON Schema, can't validate without TypeBox runtime
- * But blind-call should handle this via tryValidate first
- */
-function validateTypeBox(_schema: unknown, _data: unknown): ValidationResult<unknown> {
-	// TypeBox schemas ARE JSON Schema - they don't have validation methods on the schema itself
-	// The blind-call pattern should have caught TypeBox via Standard Schema or other means
-	// If we get here, the user needs to use the TypeBox Value module for validation
-	return {
-		success: false,
-		issues: [
-			{
-				message:
-					'TypeBox schemas require Value.Check() for validation. Use Standard Schema protocol or import @sinclair/typebox/value directly.',
-			},
-		],
-	}
-}
-
-/**
- * Effect Schema validation - pure duck typing
- * Effect schemas implement Standard Schema, so blind-call handles them
- */
-function validateEffect(_schema: unknown, _data: unknown): ValidationResult<unknown> {
-	// Effect schemas implement Standard Schema protocol (~standard)
-	// The blind-call pattern should have caught this
-	// If we get here, something went wrong with detection
-	return {
-		success: false,
-		issues: [
-			{
-				message:
-					'Effect schemas should be validated via Standard Schema protocol. Ensure schema has ~standard property.',
-			},
-		],
-	}
-}
-
-/**
- * Runtypes validation - pure duck typing
- */
-function validateRuntypes(schema: unknown, data: unknown): ValidationResult<unknown> {
-	if (!hasMethod(schema, 'check')) {
-		return { success: false, issues: [{ message: 'Invalid Runtypes schema' }] }
-	}
-
-	try {
-		const result = (schema as { check: (d: unknown) => unknown }).check(data)
-		return { success: true, data: result }
-	} catch (error) {
-		const rtError = error as { message?: string }
-		return {
-			success: false,
-			issues: [{ message: rtError.message ?? 'Validation failed' }],
-		}
-	}
-}
-
-/**
- * Convert to JSON Schema by vendor - pure duck typing
- * Blind-call handles most cases, this is fallback
- */
-async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Promise<JSONSchema> {
-	switch (vendor) {
-		case 'zod': {
-			// Zod v4: has jsonSchema method on schema
-			if (hasMethod(schema, 'toJSONSchema')) {
-				return (schema as { toJSONSchema: () => unknown }).toJSONSchema() as JSONSchema
-			}
-			// Zod v3: no native JSON Schema support
-			throw new Error(
-				'Zod v3 does not have native JSON Schema support. Use our adapter via toJsonSchema() or install zod-to-json-schema.'
-			)
-		}
-		case 'valibot': {
-			// Valibot: no native JSON Schema on schema object
-			// Use our adapter
-			throw new Error(
-				'Valibot does not have native JSON Schema support. Use our adapter via toJsonSchema().'
-			)
-		}
-		case 'arktype': {
-			if (hasMethod(schema, 'toJsonSchema')) {
-				return (schema as { toJsonSchema: () => unknown }).toJsonSchema() as JSONSchema
-			}
-			throw new Error('ArkType schema does not have toJsonSchema method')
-		}
-		case 'typebox': {
-			// TypeBox schemas ARE JSON Schema
-			return schema as JSONSchema
-		}
-		case 'effect': {
-			// Effect: no native JSON Schema on schema object
-			throw new Error(
-				'Effect schemas do not have native JSON Schema support. Use our adapter via toJsonSchema().'
-			)
-		}
-		default:
-			throw new Error(`JSON Schema conversion not supported for ${vendor}`)
-	}
-}
-
-/**
- * Convert to JSON Schema by vendor (sync) - pure duck typing
- * Blind-call handles most cases, this is fallback
- */
-function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSchema {
-	switch (vendor) {
-		case 'zod': {
-			// Zod v4: has toJSONSchema method
-			if (hasMethod(schema, 'toJSONSchema')) {
-				return (schema as { toJSONSchema: () => unknown }).toJSONSchema() as JSONSchema
-			}
-			// Zod v3: no native JSON Schema support
-			throw new Error(
-				'Zod v3 does not have native JSON Schema support. Use our adapter via toJsonSchema().'
-			)
-		}
-		case 'valibot': {
-			throw new Error(
-				'Valibot does not have native JSON Schema support. Use our adapter via toJsonSchema().'
-			)
-		}
-		case 'arktype': {
-			if (hasMethod(schema, 'toJsonSchema')) {
-				return (schema as { toJsonSchema: () => unknown }).toJsonSchema() as JSONSchema
-			}
-			throw new Error('ArkType schema does not have toJsonSchema method')
-		}
-		case 'typebox': {
-			// TypeBox schemas ARE JSON Schema
-			return schema as JSONSchema
-		}
-		case 'effect': {
-			throw new Error(
-				'Effect schemas do not have native JSON Schema support. Use our adapter via toJsonSchema().'
-			)
-		}
-		default:
-			throw new Error(`JSON Schema conversion not supported for ${vendor}`)
-	}
-}
-
-/**
- * Get metadata by vendor
- */
-function getMetadataByVendor(vendor: SchemaVendor, schema: unknown): SchemaMetadata {
-	switch (vendor) {
-		case 'zod': {
-			// Zod v4: use description getter
-			if (typeof schema === 'object' && schema !== null && '_zod' in schema) {
-				const desc = (schema as { description?: string }).description
-				return desc ? { description: desc } : {}
-			}
-			// Zod v3: use _def.description
-			const def = (schema as { _def?: { description?: string } })._def
-			return def?.description ? { description: def.description } : {}
-		}
-		case 'yup': {
-			const spec = (schema as { spec?: { meta?: SchemaMetadata } }).spec
-			return spec?.meta ?? {}
-		}
-		case 'typebox': {
-			const tb = schema as {
-				title?: string
-				description?: string
-				default?: unknown
-				examples?: unknown[]
-				deprecated?: boolean
-			}
-			const result: {
-				title?: string
-				description?: string
-				default?: unknown
-				examples?: readonly unknown[]
-				deprecated?: boolean
-			} = {}
-			if (tb.title !== undefined) result.title = tb.title
-			if (tb.description !== undefined) result.description = tb.description
-			if (tb.default !== undefined) result.default = tb.default
-			if (tb.examples !== undefined) result.examples = tb.examples
-			if (tb.deprecated !== undefined) result.deprecated = tb.deprecated
-			return result
-		}
-		case 'effect': {
-			const annotations = (schema as { annotations?: { title?: string; description?: string } })
-				.annotations
-			const result: { title?: string; description?: string } = {}
-			if (annotations) {
-				const { title, description } = annotations
-				if (typeof title === 'string') result.title = title
-				if (typeof description === 'string') result.description = description
-			}
-			return result
-		}
-		default:
-			return {}
-	}
 }

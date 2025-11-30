@@ -5,6 +5,7 @@
  * Detects via `_def.typeName` property.
  */
 
+import { withSafeParse, withSafeParseAsync } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
 // Zod v3 internal def type
@@ -305,55 +306,9 @@ export const zodV3Adapter = defineAdapter({
 	isDeprecated: () => false, // Zod doesn't have deprecated
 
 	// ============ Validation ============
-	validate: (s, data) => {
-		const schema = s as {
-			safeParse?: (d: unknown) => {
-				success: boolean
-				data?: unknown
-				error?: { issues: Array<{ message: string; path: (string | number)[] }> }
-			}
-		}
-		if (typeof schema.safeParse !== 'function') {
-			return { success: false, issues: [{ message: 'Schema does not have safeParse method' }] }
-		}
-
-		const result = schema.safeParse(data)
-		if (result.success) {
-			return { success: true, data: result.data }
-		}
-
-		return {
-			success: false,
-			issues: result.error?.issues.map((i) => ({
-				message: i.message,
-				path: i.path,
-			})) ?? [{ message: 'Validation failed' }],
-		}
-	},
-
-	validateAsync: async (s, data) => {
-		const schema = s as {
-			safeParseAsync?: (d: unknown) => Promise<{
-				success: boolean
-				data?: unknown
-				error?: { issues: Array<{ message: string; path: (string | number)[] }> }
-			}>
-		}
-		if (typeof schema.safeParseAsync !== 'function') {
-			return { success: false, issues: [{ message: 'Schema does not have safeParseAsync method' }] }
-		}
-
-		const result = await schema.safeParseAsync(data)
-		if (result.success) {
-			return { success: true, data: result.data }
-		}
-
-		return {
-			success: false,
-			issues: result.error?.issues.map((i) => ({
-				message: i.message,
-				path: i.path,
-			})) ?? [{ message: 'Validation failed' }],
-		}
-	},
+	validate: (s, data) =>
+		withSafeParse(s, data) ?? { success: false, issues: [{ message: 'Invalid Zod v3 schema' }] },
+	validateAsync: async (s, data) =>
+		(await withSafeParseAsync(s, data)) ??
+		withSafeParse(s, data) ?? { success: false, issues: [{ message: 'Invalid Zod v3 schema' }] },
 })
