@@ -7,24 +7,24 @@
 
 import type { ValidationResult } from '../types.js'
 import { ValidationError } from '../types.js'
-import type { InferSchemas, SchemaAdapter } from './types.js'
+import type { InferValidatorSchemas, ValidatorAdapter } from './types.js'
 
 // ============================================================================
 // Type Utilities
 // ============================================================================
 
-/** Extract schema type from array of adapters */
-type SupportedSchemas<T extends readonly SchemaAdapter<any>[]> = InferSchemas<T>
+/** Extract schema type from array of validator adapters */
+type SupportedSchemas<T extends readonly ValidatorAdapter<any>[]> = InferValidatorSchemas<T>
 
 // ============================================================================
 // Validator Factory
 // ============================================================================
 
-export interface ValidatorOptions<TAdapters extends readonly SchemaAdapter<any>[]> {
+export interface ValidatorOptions<TAdapters extends readonly ValidatorAdapter<any>[]> {
 	adapters: TAdapters
 }
 
-export interface Validator<TAdapters extends readonly SchemaAdapter<any>[]> {
+export interface Validator<TAdapters extends readonly ValidatorAdapter<any>[]> {
 	/** Validate data against a schema */
 	validate<TSchema extends SupportedSchemas<TAdapters>>(
 		schema: TSchema,
@@ -55,7 +55,7 @@ export interface Validator<TAdapters extends readonly SchemaAdapter<any>[]> {
 	/** Find the adapter that handles this schema */
 	findAdapter<TSchema extends SupportedSchemas<TAdapters>>(
 		schema: TSchema
-	): SchemaAdapter<TSchema> | null
+	): ValidatorAdapter<TSchema> | null
 }
 
 /**
@@ -63,10 +63,10 @@ export interface Validator<TAdapters extends readonly SchemaAdapter<any>[]> {
  *
  * @example
  * ```typescript
- * import { createValidator, zodV4Adapter, valibotAdapter } from 'anyschema';
+ * import { createValidator, zodV4Validator, valibotValidator } from 'anyschema';
  *
  * const { validate, parse, is } = createValidator({
- *   adapters: [zodV4Adapter, valibotAdapter]
+ *   adapters: [zodV4Validator, valibotValidator]
  * });
  *
  * // Works with Zod and Valibot schemas
@@ -77,13 +77,13 @@ export interface Validator<TAdapters extends readonly SchemaAdapter<any>[]> {
  * validate(yupSchema, data);    // Type error
  * ```
  */
-export function createValidator<const TAdapters extends readonly SchemaAdapter<any>[]>(
+export function createValidator<const TAdapters extends readonly ValidatorAdapter<any>[]>(
 	options: ValidatorOptions<TAdapters>
 ): Validator<TAdapters> {
 	const { adapters } = options
 
-	const findAdapter = <TSchema>(schema: TSchema): SchemaAdapter<TSchema> | null => {
-		return (adapters.find((a) => a.match(schema)) as SchemaAdapter<TSchema>) ?? null
+	const findAdapter = <TSchema>(schema: TSchema): ValidatorAdapter<TSchema> | null => {
+		return (adapters.find((a) => a.match(schema)) as ValidatorAdapter<TSchema>) ?? null
 	}
 
 	const validate = <TSchema extends SupportedSchemas<TAdapters>>(

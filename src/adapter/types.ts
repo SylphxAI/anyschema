@@ -1,8 +1,8 @@
 /**
  * Schema Adapter Types
  *
- * Generic, type-safe adapter interface.
- * Each adapter declares the schema type it handles.
+ * Split into ValidatorAdapter and TransformerAdapter for tree-shaking.
+ * Import only what you need.
  */
 
 import type { ValidationResult } from '../types.js'
@@ -23,14 +23,38 @@ export interface SchemaConstraints {
 }
 
 // ============================================================================
-// Adapter Interface
+// Validator Adapter (minimal - for validation only)
 // ============================================================================
 
 /**
- * Schema adapter interface.
+ * Minimal adapter for validation only.
+ * Use this when you only need to validate data, not transform to JSON Schema.
  * @template TSchema - The schema type this adapter handles
  */
-export interface SchemaAdapter<TSchema = unknown> {
+export interface ValidatorAdapter<TSchema = unknown> {
+	/** Unique vendor identifier */
+	readonly vendor: string
+
+	/** Type guard - check if this adapter handles the schema */
+	match(schema: unknown): schema is TSchema
+
+	/** Validate data against schema */
+	validate(schema: TSchema, data: unknown): ValidationResult<unknown>
+
+	/** Async validation (optional) */
+	validateAsync?(schema: TSchema, data: unknown): Promise<ValidationResult<unknown>>
+}
+
+// ============================================================================
+// Transformer Adapter (for JSON Schema conversion)
+// ============================================================================
+
+/**
+ * Adapter for JSON Schema transformation.
+ * Contains all introspection methods needed to convert schemas.
+ * @template TSchema - The schema type this adapter handles
+ */
+export interface TransformerAdapter<TSchema = unknown> {
 	/** Unique vendor identifier */
 	readonly vendor: string
 
@@ -73,10 +97,6 @@ export interface SchemaAdapter<TSchema = unknown> {
 	isInstanceOf(schema: TSchema): boolean
 
 	// ============ Unwrap ============
-	/**
-	 * Unwrap wrapper types (optional, nullable, lazy, transform, refine, etc.)
-	 * Returns the inner schema, or null if not a wrapper type.
-	 */
 	unwrap(schema: TSchema): unknown | null
 
 	// ============ Extract ============
@@ -104,20 +124,44 @@ export interface SchemaAdapter<TSchema = unknown> {
 	getDefault(schema: TSchema): unknown
 	getExamples(schema: TSchema): unknown[] | undefined
 	isDeprecated(schema: TSchema): boolean
-
-	// ============ Validation ============
-	validate(schema: TSchema, data: unknown): ValidationResult<unknown>
-	validateAsync?(schema: TSchema, data: unknown): Promise<ValidationResult<unknown>>
 }
 
 // ============================================================================
-// Partial Adapter (for easier implementation)
+// Combined Adapter (backwards compatible)
 // ============================================================================
 
 /**
- * Partial adapter with sensible defaults.
- * Only implement what your library supports.
+ * Full schema adapter with both validation and transformation.
  * @template TSchema - The schema type this adapter handles
+ * @deprecated Use ValidatorAdapter or TransformerAdapter for better tree-shaking
+ */
+export interface SchemaAdapter<TSchema = unknown>
+	extends ValidatorAdapter<TSchema>,
+		TransformerAdapter<TSchema> {}
+
+// ============================================================================
+// Partial Adapters (for easier implementation)
+// ============================================================================
+
+/**
+ * Partial validator adapter.
+ * @template TSchema - The schema type this adapter handles
+ */
+export type PartialValidatorAdapter<TSchema = unknown> = ValidatorAdapter<TSchema>
+
+/**
+ * Partial transformer adapter with sensible defaults.
+ * @template TSchema - The schema type this adapter handles
+ */
+export type PartialTransformerAdapter<TSchema = unknown> = {
+	readonly vendor: string
+	match(schema: unknown): schema is TSchema
+} & Partial<Omit<TransformerAdapter<TSchema>, 'vendor' | 'match'>>
+
+/**
+ * Partial full adapter with sensible defaults.
+ * @template TSchema - The schema type this adapter handles
+ * @deprecated Use PartialValidatorAdapter or PartialTransformerAdapter
  */
 export type PartialSchemaAdapter<TSchema = unknown> = {
 	readonly vendor: string
@@ -129,8 +173,26 @@ export type PartialSchemaAdapter<TSchema = unknown> = {
 // Type Inference Utilities
 // ============================================================================
 
-/** Extract schema type from adapter */
-export type InferSchema<T> = T extends SchemaAdapter<infer S> ? S : never
+/** Extract schema type from validator adapter */
+export type InferValidatorSchema<T> = T extends ValidatorAdapter<infer S> ? S : never
+
+/** Extract schema type from transformer adapter */
+export type InferTransformerSchema<T> = T extends TransformerAdapter<infer S> ? S : never
+
+/** Extract schema type from any adapter */
+export type InferSchema<T> = T extends ValidatorAdapter<infer S>
+	? S
+	: T extends TransformerAdapter<infer S>
+		? S
+		: never
+
+/** Extract schema types from array of validator adapters */
+export type InferValidatorSchemas<T extends readonly ValidatorAdapter<any>[]> =
+	InferValidatorSchema<T[number]>
+
+/** Extract schema types from array of transformer adapters */
+export type InferTransformerSchemas<T extends readonly TransformerAdapter<any>[]> =
+	InferTransformerSchema<T[number]>
 
 /** Extract schema type from array of adapters */
 export type InferSchemas<T extends readonly SchemaAdapter<any>[]> = InferSchema<T[number]>
@@ -169,7 +231,7 @@ export function getAdapters(): readonly SchemaAdapter<any>[] {
 }
 
 // ============================================================================
-// Default Implementation Helper
+// Default Implementation Helpers
 // ============================================================================
 
 const defaultFalse = () => false
@@ -178,11 +240,20 @@ const defaultUndefined = () => undefined
 const defaultEmptyArray = (): [] => []
 
 /**
- * Create an adapter with defaults for unimplemented methods
+ * Create a validator adapter (minimal, for validation only)
  */
-export function defineAdapter<TSchema>(
-	partial: PartialSchemaAdapter<TSchema>
-): SchemaAdapter<TSchema> {
+export function defineValidatorAdapter<TSchema>(
+	adapter: PartialValidatorAdapter<TSchema>
+): ValidatorAdapter<TSchema> {
+	return adapter
+}
+
+/**
+ * Create a transformer adapter with defaults
+ */
+export function defineTransformerAdapter<TSchema>(
+	partial: PartialTransformerAdapter<TSchema>
+): TransformerAdapter<TSchema> {
 	return {
 		// Defaults
 		isString: defaultFalse,
@@ -246,5 +317,19 @@ export function defineAdapter<TSchema>(
 
 		// Override with partial
 		...partial,
+	} as TransformerAdapter<TSchema>
+}
+
+/**
+ * Create a full adapter with defaults for unimplemented methods
+ * @deprecated Use defineValidatorAdapter or defineTransformerAdapter
+ */
+export function defineAdapter<TSchema>(
+	partial: PartialSchemaAdapter<TSchema>
+): SchemaAdapter<TSchema> {
+	return {
+		...defineTransformerAdapter(partial),
+		validate: partial.validate,
+		validateAsync: partial.validateAsync,
 	} as SchemaAdapter<TSchema>
 }

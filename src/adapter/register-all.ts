@@ -14,8 +14,6 @@
  * ```
  */
 
-import { registerAdapter } from './types.js'
-
 // Import all adapters
 import { arktypeAdapter } from './adapters/arktype.js'
 import { effectAdapter } from './adapters/effect.js'
@@ -28,6 +26,7 @@ import { valibotAdapter } from './adapters/valibot.js'
 import { yupAdapter } from './adapters/yup.js'
 import { zodV3Adapter } from './adapters/zod-v3.js'
 import { zodV4Adapter } from './adapters/zod-v4.js'
+import { registerAdapter } from './types.js'
 
 // Register in order (more specific first)
 registerAdapter(zodV4Adapter)

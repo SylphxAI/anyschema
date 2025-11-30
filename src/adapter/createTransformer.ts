@@ -6,45 +6,45 @@
  */
 
 import type { JSONSchema } from '../types.js'
-import type { InferSchemas, SchemaAdapter, SchemaConstraints } from './types.js'
+import type { InferTransformerSchemas, SchemaConstraints, TransformerAdapter } from './types.js'
 
 // ============================================================================
 // Type Utilities
 // ============================================================================
 
-/** Extract schema type from array of adapters */
-type SupportedSchemas<T extends readonly SchemaAdapter<any>[]> = InferSchemas<T>
+/** Extract schema type from array of transformer adapters */
+type SupportedSchemas<T extends readonly TransformerAdapter<any>[]> = InferTransformerSchemas<T>
 
 // ============================================================================
 // Transformer Factory
 // ============================================================================
 
-export interface TransformerOptions<TAdapters extends readonly SchemaAdapter<any>[]> {
+export interface TransformerOptions<TAdapters extends readonly TransformerAdapter<any>[]> {
 	adapters: TAdapters
 }
 
-export interface Transformer<TAdapters extends readonly SchemaAdapter<any>[]> {
+export interface Transformer<TAdapters extends readonly TransformerAdapter<any>[]> {
 	/** Convert schema to JSON Schema */
 	toJsonSchema<TSchema extends SupportedSchemas<TAdapters>>(schema: TSchema): JSONSchema
 
 	/** Find the adapter that handles this schema */
 	findAdapter<TSchema extends SupportedSchemas<TAdapters>>(
 		schema: TSchema
-	): SchemaAdapter<TSchema> | null
+	): TransformerAdapter<TSchema> | null
 }
 
 // ============================================================================
 // Transformer Context
 // ============================================================================
 
-interface TransformContext<TAdapters extends readonly SchemaAdapter<any>[]> {
+interface TransformContext<TAdapters extends readonly TransformerAdapter<any>[]> {
 	adapters: TAdapters
 	seen: Map<unknown, string>
 	defs: Map<string, JSONSchema>
 	counter: number
 }
 
-function createContext<TAdapters extends readonly SchemaAdapter<any>[]>(
+function createContext<TAdapters extends readonly TransformerAdapter<any>[]>(
 	adapters: TAdapters
 ): TransformContext<TAdapters> {
 	return {
@@ -60,10 +60,10 @@ function createContext<TAdapters extends readonly SchemaAdapter<any>[]>(
  *
  * @example
  * ```typescript
- * import { createTransformer, zodV4Adapter, valibotAdapter } from 'anyschema';
+ * import { createTransformer, zodV4Transformer, valibotTransformer } from 'anyschema';
  *
  * const { toJsonSchema } = createTransformer({
- *   adapters: [zodV4Adapter, valibotAdapter]
+ *   adapters: [zodV4Transformer, valibotTransformer]
  * });
  *
  * // Works with Zod and Valibot schemas
@@ -74,13 +74,13 @@ function createContext<TAdapters extends readonly SchemaAdapter<any>[]>(
  * toJsonSchema(yupSchema);      // Type error
  * ```
  */
-export function createTransformer<const TAdapters extends readonly SchemaAdapter<any>[]>(
+export function createTransformer<const TAdapters extends readonly TransformerAdapter<any>[]>(
 	options: TransformerOptions<TAdapters>
 ): Transformer<TAdapters> {
 	const { adapters } = options
 
-	const findAdapter = <TSchema>(schema: TSchema): SchemaAdapter<TSchema> | null => {
-		return (adapters.find((a) => a.match(schema)) as SchemaAdapter<TSchema>) ?? null
+	const findAdapter = <TSchema>(schema: TSchema): TransformerAdapter<TSchema> | null => {
+		return (adapters.find((a) => a.match(schema)) as TransformerAdapter<TSchema>) ?? null
 	}
 
 	const toJsonSchema = <TSchema extends SupportedSchemas<TAdapters>>(
@@ -115,11 +115,11 @@ export function createTransformer<const TAdapters extends readonly SchemaAdapter
 // Internal Transform Function
 // ============================================================================
 
-function transform<TAdapters extends readonly SchemaAdapter<any>[]>(
+function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 	schema: unknown,
 	ctx: TransformContext<TAdapters>
 ): JSONSchema {
-	const adapter = ctx.adapters.find((a) => a.match(schema)) as SchemaAdapter<unknown> | undefined
+	const adapter = ctx.adapters.find((a) => a.match(schema)) as TransformerAdapter<unknown> | undefined
 	if (!adapter) {
 		throw new Error(`No adapter found for schema: ${typeof schema}`)
 	}
@@ -262,7 +262,7 @@ function transform<TAdapters extends readonly SchemaAdapter<any>[]>(
 			properties[key] = transform(value, ctx)
 			// Check if the property value is optional
 			const valueAdapter = ctx.adapters.find((a) => a.match(value)) as
-				| SchemaAdapter<unknown>
+				| TransformerAdapter<unknown>
 				| undefined
 			if (!valueAdapter?.isOptional(value)) {
 				required.push(key)

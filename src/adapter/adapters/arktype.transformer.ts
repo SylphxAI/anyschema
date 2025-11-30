@@ -1,0 +1,308 @@
+/**
+ * ArkType Transformer Adapter
+ *
+ * Full introspection for JSON Schema conversion.
+ * Use this when you need to convert schemas to JSON Schema.
+ */
+
+import { defineTransformerAdapter, type SchemaConstraints } from '../types.js'
+
+// ============================================================================
+// Schema Type
+// ============================================================================
+
+// Type helpers for ArkType's internal JSON representation
+type ArkJson =
+	| string // reference like "string", "number"
+	| ArkJsonObject
+	| ArkJsonObject[] // union
+
+interface ArkJsonObject {
+	domain?: string
+	unit?: unknown
+	required?: Array<{ key: string; value: ArkJson }>
+	optional?: Array<{ key: string; value: ArkJson }>
+	sequence?: ArkJson | { prefix?: ArkJson[]; variadic?: ArkJson }
+	proto?: string
+	exactLength?: number
+	minLength?: number
+	maxLength?: number
+	min?: number
+	max?: number
+	pattern?: Array<{ rule: string; flags: string; meta?: string }>
+	meta?: { format?: string; description?: string }
+}
+
+/** ArkType schema shape for type inference */
+export interface ArkTypeSchema {
+	internal: {
+		kind: string
+		json: ArkJson
+		domain?: string
+	}
+	json: ArkJson
+	expression: string
+	description?: string
+}
+
+// Type guard - ArkType schemas are functions with internal and json properties
+const isArkTypeSchema = (s: unknown): s is ArkTypeSchema => {
+	if (!s) return false
+	// ArkType schemas are functions
+	if (typeof s !== 'function' && typeof s !== 'object') return false
+	// internal can be a function or object (ArkType nodes extend Function)
+	if (!('internal' in s) || !('json' in s)) return false
+	const internal = (s as { internal: unknown }).internal
+	return (
+		internal != null &&
+		(typeof internal === 'object' || typeof internal === 'function') &&
+		'kind' in (internal as object)
+	)
+}
+
+// Helpers
+const getJson = (s: ArkTypeSchema): ArkJson => s.json
+
+const normalizeJson = (json: ArkJson): ArkJsonObject | null => {
+	if (typeof json === 'string') return { domain: json }
+	if (Array.isArray(json)) return null // Union
+	return json
+}
+
+const hasDomain = (s: ArkTypeSchema, domain: string): boolean => {
+	const obj = normalizeJson(getJson(s))
+	return obj?.domain === domain
+}
+
+const isUnit = (s: ArkTypeSchema): boolean => {
+	const json = getJson(s)
+	if (Array.isArray(json) || typeof json === 'string') return false
+	return 'unit' in json
+}
+
+const isUnionJson = (s: ArkTypeSchema): boolean => Array.isArray(getJson(s))
+
+// ============================================================================
+// Transformer Adapter
+// ============================================================================
+
+export const arktypeTransformer = defineTransformerAdapter<ArkTypeSchema>({
+	vendor: 'arktype',
+	match: isArkTypeSchema,
+
+	// ============ Type Detection ============
+	isString: (s) => hasDomain(s, 'string'),
+	isNumber: (s) => hasDomain(s, 'number'),
+	isBoolean: (s) => {
+		// ArkType represents boolean as union of true/false units
+		const json = getJson(s)
+		if (!Array.isArray(json) || json.length !== 2) return false
+		const hasTrue = json.some((j) => typeof j === 'object' && j.unit === true)
+		const hasFalse = json.some((j) => typeof j === 'object' && j.unit === false)
+		return hasTrue && hasFalse
+	},
+	isNull: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		return json.unit === null
+	},
+	isUndefined: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		return json.unit === 'undefined'
+	},
+	isVoid: () => false, // ArkType doesn't have void
+	isAny: () => false, // ArkType doesn't have any
+	isUnknown: (s) => {
+		// ArkType unknown is empty intersection {}
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		return Object.keys(json).length === 0
+	},
+	isNever: (s) => {
+		// ArkType never is empty union []
+		const json = getJson(s)
+		return Array.isArray(json) && json.length === 0
+	},
+	isObject: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		return json.domain === 'object' || 'required' in json || 'optional' in json
+	},
+	isArray: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		// Array has sequence and proto=Array, but not a tuple (no exactLength or prefix-only)
+		if (json.proto !== 'Array') return false
+		if (!json.sequence) return false
+		if (json.exactLength !== undefined) return false // tuple
+		const seq = json.sequence
+		if (typeof seq === 'object' && 'prefix' in seq && !('variadic' in seq)) return false // tuple
+		return true
+	},
+	isUnion: (s) => {
+		// Union is array, but not boolean (which is true|false)
+		if (!isUnionJson(s)) return false
+		const json = getJson(s) as ArkJsonObject[]
+		// Exclude boolean representation
+		if (json.length === 2) {
+			const hasTrue = json.some((j) => typeof j === 'object' && j.unit === true)
+			const hasFalse = json.some((j) => typeof j === 'object' && j.unit === false)
+			if (hasTrue && hasFalse) return false
+		}
+		return json.length > 0
+	},
+	isLiteral: (s) => isUnit(s),
+	isEnum: () => false, // ArkType doesn't have enum
+	isOptional: () => false, // Handled at object property level
+	isNullable: () => false, // ArkType uses union for nullable
+	isTuple: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		if (json.proto !== 'Array') return false
+		// Tuple has exactLength or prefix-only sequence
+		if (json.exactLength !== undefined) return true
+		const seq = json.sequence
+		if (typeof seq === 'object' && 'prefix' in seq && !('variadic' in seq)) return true
+		return false
+	},
+	isRecord: () => false, // ArkType handles this differently
+	isMap: () => false,
+	isSet: () => false,
+	isIntersection: (_s) => {
+		// ArkType represents intersection differently - mostly via merged objects
+		// For now, don't expose as intersection
+		return false
+	},
+	isLazy: () => false, // ArkType handles laziness internally
+	isTransform: () => false, // Would need to check for morph
+	isRefine: () => false,
+	isDefault: () => false,
+	isCatch: () => false,
+	isBranded: () => false,
+	isDate: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		return json.proto === 'Date'
+	},
+	isBigInt: (s) => hasDomain(s, 'bigint'),
+	isSymbol: (s) => hasDomain(s, 'symbol'),
+	isFunction: () => false,
+	isPromise: () => false,
+	isInstanceOf: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return false
+		return 'proto' in json && json.proto !== 'Array'
+	},
+
+	// ============ Unwrap ============
+	unwrap: () => null, // ArkType doesn't have wrapper types like optional
+
+	// ============ Extract ============
+	getObjectEntries: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return []
+		const entries: [string, unknown][] = []
+		// Required properties
+		if (json.required) {
+			for (const prop of json.required) {
+				entries.push([prop.key, { _arkJson: prop.value }])
+			}
+		}
+		// Optional properties - wrap with marker
+		if (json.optional) {
+			for (const prop of json.optional) {
+				entries.push([prop.key, { _arkJson: prop.value, _optional: true }])
+			}
+		}
+		return entries
+	},
+
+	getArrayElement: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return null
+		const seq = json.sequence
+		if (!seq) return null
+		if (typeof seq === 'string' || (typeof seq === 'object' && !('prefix' in seq))) {
+			return { _arkJson: typeof seq === 'string' ? seq : seq }
+		}
+		if (typeof seq === 'object' && 'variadic' in seq) {
+			return { _arkJson: seq.variadic }
+		}
+		return null
+	},
+
+	getUnionOptions: (s) => {
+		const json = getJson(s)
+		if (!Array.isArray(json)) return []
+		return json.map((j) => ({ _arkJson: j }))
+	},
+
+	getLiteralValue: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return undefined
+		if ('unit' in json) {
+			// Handle special cases
+			if (json.unit === 'undefined') return undefined
+			return json.unit
+		}
+		return undefined
+	},
+
+	getEnumValues: () => [],
+
+	getTupleItems: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return []
+		const seq = json.sequence
+		if (!seq || typeof seq !== 'object' || !('prefix' in seq)) return []
+		return (seq.prefix ?? []).map((j) => ({ _arkJson: j }))
+	},
+
+	getRecordKeyType: () => null,
+	getRecordValueType: () => null,
+	getMapKeyType: () => null,
+	getMapValueType: () => null,
+	getSetElement: () => null,
+	getIntersectionSchemas: () => [],
+
+	getPromiseInner: () => null,
+
+	getInstanceOfClass: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return null
+		return json.proto ?? null
+	},
+
+	// ============ Constraints ============
+	getConstraints: (s) => {
+		const json = getJson(s)
+		if (!json || Array.isArray(json) || typeof json === 'string') return null
+
+		const result: SchemaConstraints = {}
+
+		if (json.minLength !== undefined) result.minLength = json.minLength
+		if (json.maxLength !== undefined) result.maxLength = json.maxLength
+		if (json.min !== undefined) result.min = json.min
+		if (json.max !== undefined) result.max = json.max
+
+		// Pattern - take first one
+		if (json.pattern && json.pattern.length > 0 && json.pattern[0]) {
+			result.pattern = json.pattern[0].rule
+		}
+
+		// Format from meta
+		if (json.meta?.format) {
+			result.format = json.meta.format
+		}
+
+		return Object.keys(result).length > 0 ? result : null
+	},
+
+	// ============ Metadata ============
+	getDescription: (s) => s.description,
+	getTitle: () => undefined,
+	getDefault: () => undefined,
+	getExamples: () => undefined,
+	isDeprecated: () => false,
+})
