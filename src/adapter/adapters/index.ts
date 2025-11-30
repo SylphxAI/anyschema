@@ -8,7 +8,7 @@
 import { registerAdapter } from '../types.js'
 
 // Import all adapters
-import { arkTypeToJsonSchema, arktypeAdapter } from './arktype.js'
+import { arktypeAdapter } from './arktype.js'
 import { effectAdapter } from './effect.js'
 import { ioTsAdapter } from './io-ts.js'
 import { joiAdapter } from './joi.js'
@@ -47,7 +47,6 @@ registerAdapter(runtypesAdapter)
 // Export for direct use
 export {
 	arktypeAdapter,
-	arkTypeToJsonSchema,
 	effectAdapter,
 	ioTsAdapter,
 	joiAdapter,

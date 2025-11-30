@@ -31,7 +31,6 @@ import './adapters/index.js'
 
 // Export all adapters
 export {
-	arkTypeToJsonSchema,
 	arktypeAdapter,
 	effectAdapter,
 	ioTsAdapter,
