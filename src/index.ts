@@ -96,6 +96,7 @@ export type {
 // Re-export error class
 export { ValidationError } from './types.js'
 
+import { toJsonSchema as adapterToJsonSchema } from './adapter/index.js'
 import { tryToJsonSchema, tryValidate, tryValidateAsync } from './blind-call.js'
 import { detect, isAnySchemaProtocol, isStandardSchema } from './detection.js'
 // Import for internal use
@@ -352,7 +353,14 @@ export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
 	const native = tryToJsonSchema(schema)
 	if (native) return native
 
-	// 2. Duck typing + vendor-specific
+	// 2. Try adapter-based transformer (handles Zod v3/v4, Valibot, ArkType)
+	try {
+		return adapterToJsonSchema(schema)
+	} catch {
+		// Adapter not found, continue to vendor-specific
+	}
+
+	// 3. Fallback: vendor-specific error messages
 	const detection = detect(schema)
 	if (!detection) {
 		throw new Error('Unsupported schema type. Expected a schema with JSON Schema support.')
@@ -379,7 +387,14 @@ export function toJsonSchemaSync(schema: unknown): JSONSchema {
 	const native = tryToJsonSchema(schema)
 	if (native) return native
 
-	// 2. Duck typing + vendor-specific
+	// 2. Try adapter-based transformer (handles Zod v3/v4, Valibot, ArkType)
+	try {
+		return adapterToJsonSchema(schema)
+	} catch {
+		// Adapter not found, continue to vendor-specific
+	}
+
+	// 3. Fallback: vendor-specific error messages
 	const detection = detect(schema)
 	if (!detection) {
 		throw new Error('Unsupported schema type. Expected a schema with JSON Schema support.')
@@ -620,31 +635,34 @@ function validateZod(schema: unknown, data: unknown): ValidationResult<unknown> 
 }
 
 /**
- * Valibot validation - pure duck typing
+ * Valibot validation - pure duck typing via ~run
  */
 function validateValibot(schema: unknown, data: unknown): ValidationResult<unknown> {
-	let safeParse: (s: unknown, d: unknown) => unknown
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const v = require('valibot') as { safeParse: typeof safeParse }
-		safeParse = v.safeParse
-	} catch {
-		return { success: false, issues: [{ message: 'valibot not installed' }] }
+	// Valibot schemas have ~run method
+	const s = schema as {
+		'~run'?: (
+			dataset: { typed: boolean; value: unknown },
+			config: unknown
+		) => {
+			typed: boolean
+			value: unknown
+			issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
+		}
 	}
 
-	const result = safeParse(schema, data) as {
-		success: boolean
-		output?: unknown
-		issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
+	if (typeof s['~run'] !== 'function') {
+		return { success: false, issues: [{ message: 'Invalid Valibot schema' }] }
 	}
 
-	if (result.success) {
-		return { success: true, data: result.output }
+	const result = s['~run']({ typed: false, value: data }, {})
+
+	if (!result.issues || result.issues.length === 0) {
+		return { success: true, data: result.value }
 	}
 
 	return {
 		success: false,
-		issues: (result.issues ?? []).map((issue) => {
+		issues: result.issues.map((issue) => {
 			const base: { message: string; path?: (string | number)[] } = {
 				message: issue.message,
 			}
@@ -657,33 +675,37 @@ function validateValibot(schema: unknown, data: unknown): ValidationResult<unkno
 }
 
 /**
- * Valibot async validation
+ * Valibot async validation - pure duck typing via ~run (may return promise)
  */
 async function validateValibotAsync(
 	schema: unknown,
 	data: unknown
 ): Promise<ValidationResult<unknown>> {
-	let safeParseAsync: (s: unknown, d: unknown) => Promise<unknown>
-	try {
-		const v = (await import('valibot')) as { safeParseAsync: typeof safeParseAsync }
-		safeParseAsync = v.safeParseAsync
-	} catch {
-		return { success: false, issues: [{ message: 'valibot not installed' }] }
+	// Valibot schemas have ~run method that may return a promise for async schemas
+	const s = schema as {
+		'~run'?: (
+			dataset: { typed: boolean; value: unknown },
+			config: unknown
+		) => Promise<{
+			typed: boolean
+			value: unknown
+			issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
+		}>
 	}
 
-	const result = (await safeParseAsync(schema, data)) as {
-		success: boolean
-		output?: unknown
-		issues?: Array<{ message: string; path?: Array<{ key: string | number }> }>
+	if (typeof s['~run'] !== 'function') {
+		return { success: false, issues: [{ message: 'Invalid Valibot schema' }] }
 	}
 
-	if (result.success) {
-		return { success: true, data: result.output }
+	const result = await s['~run']({ typed: false, value: data }, {})
+
+	if (!result.issues || result.issues.length === 0) {
+		return { success: true, data: result.value }
 	}
 
 	return {
 		success: false,
-		issues: (result.issues ?? []).map((issue) => {
+		issues: result.issues.map((issue) => {
 			const base: { message: string; path?: (string | number)[] } = {
 				message: issue.message,
 			}
@@ -815,24 +837,25 @@ function validateIoTs(schema: unknown, data: unknown): ValidationResult<unknown>
 
 /**
  * Superstruct validation - pure duck typing
+ * Superstruct schemas are callable and have validate method
  */
 function validateSuperstruct(schema: unknown, data: unknown): ValidationResult<unknown> {
-	let validate: (d: unknown, s: unknown) => [unknown, unknown]
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const ss = require('superstruct') as { validate: typeof validate }
-		validate = ss.validate
-	} catch {
-		return { success: false, issues: [{ message: 'superstruct not installed' }] }
+	// Superstruct schemas have validate method on the struct
+	const s = schema as {
+		validate?: (
+			value: unknown,
+			options?: unknown
+		) => [{ failures: () => Array<{ message: string; path: (string | number)[] }> } | null, unknown]
 	}
 
-	const [error, value] = validate(data, schema)
+	if (typeof s.validate !== 'function') {
+		return { success: false, issues: [{ message: 'Invalid Superstruct schema' }] }
+	}
+
+	const [error, value] = s.validate(data)
 
 	if (error) {
-		const ssError = error as {
-			failures?: () => Array<{ message: string; path: (string | number)[] }>
-		}
-		const failures = ssError.failures?.() ?? []
+		const failures = error.failures?.() ?? []
 		return {
 			success: false,
 			issues: failures.map((f) => ({
@@ -847,58 +870,40 @@ function validateSuperstruct(schema: unknown, data: unknown): ValidationResult<u
 
 /**
  * TypeBox validation - pure duck typing
+ * TypeBox schemas are JSON Schema, can't validate without TypeBox runtime
+ * But blind-call should handle this via tryValidate first
  */
-function validateTypeBox(schema: unknown, data: unknown): ValidationResult<unknown> {
-	let Value: {
-		Check: (s: unknown, d: unknown) => boolean
-		Errors: (s: unknown, d: unknown) => Iterable<{ message: string; path: string }>
-	}
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const tb = require('@sinclair/typebox/value') as { Value: typeof Value }
-		Value = tb.Value
-	} catch {
-		return { success: false, issues: [{ message: '@sinclair/typebox not installed' }] }
-	}
-
-	if (Value.Check(schema, data)) {
-		return { success: true, data }
-	}
-
-	const errors = [...Value.Errors(schema, data)]
+function validateTypeBox(_schema: unknown, _data: unknown): ValidationResult<unknown> {
+	// TypeBox schemas ARE JSON Schema - they don't have validation methods on the schema itself
+	// The blind-call pattern should have caught TypeBox via Standard Schema or other means
+	// If we get here, the user needs to use the TypeBox Value module for validation
 	return {
 		success: false,
-		issues: errors.map((e) => ({
-			message: e.message,
-			path: e.path.split('/').filter(Boolean) as (string | number)[],
-		})),
+		issues: [
+			{
+				message:
+					'TypeBox schemas require Value.Check() for validation. Use Standard Schema protocol or import @sinclair/typebox/value directly.',
+			},
+		],
 	}
 }
 
 /**
  * Effect Schema validation - pure duck typing
+ * Effect schemas implement Standard Schema, so blind-call handles them
  */
-function validateEffect(schema: unknown, data: unknown): ValidationResult<unknown> {
-	let decodeUnknownSync: (s: unknown) => (d: unknown) => unknown
-	try {
-		// eslint-disable-next-line @typescript-eslint/no-require-imports
-		const S = require('@effect/schema/Schema') as { decodeUnknownSync: typeof decodeUnknownSync }
-		decodeUnknownSync = S.decodeUnknownSync
-	} catch {
-		return { success: false, issues: [{ message: '@effect/schema not installed' }] }
-	}
-
-	try {
-		const result = decodeUnknownSync(schema)(data)
-		return { success: true, data: result }
-	} catch (error) {
-		const effectError = error as { message?: string; errors?: Array<{ message: string }> }
-		return {
-			success: false,
-			issues: effectError.errors?.map((e) => ({ message: e.message })) ?? [
-				{ message: effectError.message ?? 'Validation failed' },
-			],
-		}
+function validateEffect(_schema: unknown, _data: unknown): ValidationResult<unknown> {
+	// Effect schemas implement Standard Schema protocol (~standard)
+	// The blind-call pattern should have caught this
+	// If we get here, something went wrong with detection
+	return {
+		success: false,
+		issues: [
+			{
+				message:
+					'Effect schemas should be validated via Standard Schema protocol. Ensure schema has ~standard property.',
+			},
+		],
 	}
 }
 
@@ -923,37 +928,27 @@ function validateRuntypes(schema: unknown, data: unknown): ValidationResult<unkn
 }
 
 /**
- * Convert to JSON Schema by vendor (async)
+ * Convert to JSON Schema by vendor - pure duck typing
+ * Blind-call handles most cases, this is fallback
  */
 async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Promise<JSONSchema> {
 	switch (vendor) {
 		case 'zod': {
-			// Zod v4 native schemas have _zod property, use toJSONSchema from zod/v4
-			if (typeof schema === 'object' && schema !== null && '_zod' in schema) {
-				try {
-					const { toJSONSchema } = await import('zod/v4')
-					return toJSONSchema(schema as unknown as Parameters<typeof toJSONSchema>[0]) as JSONSchema
-				} catch {
-					throw new Error('Zod v4 schema detected but zod/v4 not available')
-				}
+			// Zod v4: has jsonSchema method on schema
+			if (hasMethod(schema, 'toJSONSchema')) {
+				return (schema as { toJSONSchema: () => unknown }).toJSONSchema() as JSONSchema
 			}
-			// Zod v3 schemas have _def property, use zod-to-json-schema
-			try {
-				const { zodToJsonSchema } = await import('zod-to-json-schema')
-				return zodToJsonSchema(schema as Parameters<typeof zodToJsonSchema>[0]) as JSONSchema
-			} catch {
-				throw new Error('zod-to-json-schema not installed. Run: npm install zod-to-json-schema')
-			}
+			// Zod v3: no native JSON Schema support
+			throw new Error(
+				'Zod v3 does not have native JSON Schema support. Use our adapter via toJsonSchema() or install zod-to-json-schema.'
+			)
 		}
 		case 'valibot': {
-			try {
-				const { toJsonSchema } = await import('@valibot/to-json-schema')
-				return toJsonSchema(schema as Parameters<typeof toJsonSchema>[0]) as JSONSchema
-			} catch {
-				throw new Error(
-					'@valibot/to-json-schema not installed. Run: npm install @valibot/to-json-schema'
-				)
-			}
+			// Valibot: no native JSON Schema on schema object
+			// Use our adapter
+			throw new Error(
+				'Valibot does not have native JSON Schema support. Use our adapter via toJsonSchema().'
+			)
 		}
 		case 'arktype': {
 			if (hasMethod(schema, 'toJsonSchema')) {
@@ -966,18 +961,10 @@ async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Prom
 			return schema as JSONSchema
 		}
 		case 'effect': {
-			try {
-				// @ts-expect-error - dynamic import of optional dependency
-				const effectSchema = (await import('@effect/schema')) as {
-					JSONSchema?: { make: (s: unknown) => unknown }
-				}
-				if (!effectSchema.JSONSchema) {
-					throw new Error('@effect/schema not installed')
-				}
-				return effectSchema.JSONSchema.make(schema) as unknown as JSONSchema
-			} catch {
-				throw new Error('@effect/schema not installed. Run: npm install @effect/schema')
-			}
+			// Effect: no native JSON Schema on schema object
+			throw new Error(
+				'Effect schemas do not have native JSON Schema support. Use our adapter via toJsonSchema().'
+			)
 		}
 		default:
 			throw new Error(`JSON Schema conversion not supported for ${vendor}`)
@@ -985,41 +972,25 @@ async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Prom
 }
 
 /**
- * Convert to JSON Schema by vendor (sync)
+ * Convert to JSON Schema by vendor (sync) - pure duck typing
+ * Blind-call handles most cases, this is fallback
  */
 function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSchema {
 	switch (vendor) {
 		case 'zod': {
-			// Zod v4: NOT supported in sync mode
-			// toJSONSchema is a static function that requires dynamic import to avoid ESM/CJS dual package issue
-			if (typeof schema === 'object' && schema !== null && '_zod' in schema) {
-				throw new Error(
-					'Zod v4 does not support toJsonSchemaSync(). Use async toJsonSchema() instead.'
-				)
+			// Zod v4: has toJSONSchema method
+			if (hasMethod(schema, 'toJSONSchema')) {
+				return (schema as { toJSONSchema: () => unknown }).toJSONSchema() as JSONSchema
 			}
-			// Zod v3 schemas have _def property, use zod-to-json-schema
-			try {
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
-				const { zodToJsonSchema } = require('zod-to-json-schema') as {
-					zodToJsonSchema: (s: unknown) => JSONSchema
-				}
-				return zodToJsonSchema(schema)
-			} catch {
-				throw new Error('zod-to-json-schema not installed. Run: npm install zod-to-json-schema')
-			}
+			// Zod v3: no native JSON Schema support
+			throw new Error(
+				'Zod v3 does not have native JSON Schema support. Use our adapter via toJsonSchema().'
+			)
 		}
 		case 'valibot': {
-			try {
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
-				const { toJsonSchema } = require('@valibot/to-json-schema') as {
-					toJsonSchema: (s: unknown) => JSONSchema
-				}
-				return toJsonSchema(schema)
-			} catch {
-				throw new Error(
-					'@valibot/to-json-schema not installed. Run: npm install @valibot/to-json-schema'
-				)
-			}
+			throw new Error(
+				'Valibot does not have native JSON Schema support. Use our adapter via toJsonSchema().'
+			)
 		}
 		case 'arktype': {
 			if (hasMethod(schema, 'toJsonSchema')) {
@@ -1032,15 +1003,9 @@ function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSc
 			return schema as JSONSchema
 		}
 		case 'effect': {
-			try {
-				// eslint-disable-next-line @typescript-eslint/no-require-imports
-				const { JSONSchema } = require('@effect/schema') as {
-					JSONSchema: { make: (s: unknown) => unknown }
-				}
-				return JSONSchema.make(schema) as JSONSchema
-			} catch {
-				throw new Error('@effect/schema not installed. Run: npm install @effect/schema')
-			}
+			throw new Error(
+				'Effect schemas do not have native JSON Schema support. Use our adapter via toJsonSchema().'
+			)
 		}
 		default:
 			throw new Error(`JSON Schema conversion not supported for ${vendor}`)
