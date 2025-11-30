@@ -37,7 +37,7 @@ export function toJsonSchema<T extends StandardSchemaV1>(
   if (!adapter) {
     throw new Error(
       `Unsupported vendor: "${vendor}". ` +
-        `Supported vendors are: zod, valibot, arktype, typebox, effect`
+        `Supported vendors are: zod, valibot, arktype`
     );
   }
 
@@ -89,16 +89,17 @@ export async function toJsonSchemaAsync<T extends StandardSchemaV1>(
   schema: WithToJsonSchema<T>
 ): Promise<JSONSchema> {
   const vendor = getVendor(schema);
-  const adapter = getAsyncAdapter(vendor);
-
-  if (!adapter) {
-    throw new Error(
-      `Unsupported vendor: "${vendor}". ` +
-        `Supported vendors are: zod, valibot, arktype, typebox, effect`
-    );
-  }
 
   try {
+    const adapter = await getAsyncAdapter(vendor);
+
+    if (!adapter) {
+      throw new Error(
+        `Unsupported vendor: "${vendor}". ` +
+          `Supported vendors are: zod, valibot, arktype`
+      );
+    }
+
     return await adapter(schema);
   } catch (error) {
     // Check if it's a module not found error (missing peer dependency)
