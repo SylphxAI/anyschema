@@ -1,14 +1,12 @@
 /**
- * Factory Functions for Type-Safe Plugin Architecture
+ * Transformer Factory
  *
- * Create validator/transformer instances with only the adapters you need.
- * Full type safety - TypeScript errors if schema type not in adapters.
+ * Create type-safe transformer with only the adapters you need.
+ * Separate from validator for optimal tree-shaking.
  */
 
-import type { JSONSchema, ValidationResult } from '../types.js'
-import { ValidationError } from '../types.js'
-import type { SchemaAdapter, SchemaConstraints } from './types.js'
-import type { InferSchemas } from './types.js'
+import type { JSONSchema } from '../types.js'
+import type { InferSchemas, SchemaAdapter, SchemaConstraints } from './types.js'
 
 // ============================================================================
 // Type Utilities
@@ -16,158 +14,6 @@ import type { InferSchemas } from './types.js'
 
 /** Extract schema type from array of adapters */
 type SupportedSchemas<T extends readonly SchemaAdapter<any>[]> = InferSchemas<T>
-
-// ============================================================================
-// Validator Factory
-// ============================================================================
-
-export interface ValidatorOptions<TAdapters extends readonly SchemaAdapter<any>[]> {
-	adapters: TAdapters
-}
-
-export interface Validator<TAdapters extends readonly SchemaAdapter<any>[]> {
-	/** Validate data against a schema */
-	validate<TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): ValidationResult<unknown>
-
-	/** Async validation */
-	validateAsync<TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): Promise<ValidationResult<unknown>>
-
-	/** Type guard that narrows the type of data */
-	is<TSchema extends SupportedSchemas<TAdapters>>(schema: TSchema, data: unknown): boolean
-
-	/** Assert that data matches schema, throws if not */
-	assert<TSchema extends SupportedSchemas<TAdapters>>(schema: TSchema, data: unknown): void
-
-	/** Parse data, throwing on validation errors */
-	parse<TSchema extends SupportedSchemas<TAdapters>>(schema: TSchema, data: unknown): unknown
-
-	/** Async version of parse */
-	parseAsync<TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): Promise<unknown>
-
-	/** Find the adapter that handles this schema */
-	findAdapter<TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema
-	): SchemaAdapter<TSchema> | null
-}
-
-/**
- * Create a type-safe validator with specific adapters.
- *
- * @example
- * ```typescript
- * import { createValidator, zodV4Adapter, valibotAdapter } from 'anyschema';
- *
- * const { validate, parse, is } = createValidator({
- *   adapters: [zodV4Adapter, valibotAdapter]
- * });
- *
- * // Works with Zod and Valibot schemas
- * validate(zodSchema, data);    // ✓
- * validate(valibotSchema, data); // ✓
- *
- * // TypeScript error - Yup not in adapters!
- * validate(yupSchema, data);    // ✗ Type error
- * ```
- */
-export function createValidator<const TAdapters extends readonly SchemaAdapter<any>[]>(
-	options: ValidatorOptions<TAdapters>
-): Validator<TAdapters> {
-	const { adapters } = options
-
-	const findAdapter = <TSchema>(schema: TSchema): SchemaAdapter<TSchema> | null => {
-		return (adapters.find((a) => a.match(schema)) as SchemaAdapter<TSchema>) ?? null
-	}
-
-	const validate = <TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): ValidationResult<unknown> => {
-		const adapter = findAdapter(schema)
-		if (!adapter) {
-			return {
-				success: false,
-				issues: [{ message: 'No adapter found for schema' }],
-			}
-		}
-		return adapter.validate(schema, data)
-	}
-
-	const validateAsync = async <TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): Promise<ValidationResult<unknown>> => {
-		const adapter = findAdapter(schema)
-		if (!adapter) {
-			return {
-				success: false,
-				issues: [{ message: 'No adapter found for schema' }],
-			}
-		}
-		if (adapter.validateAsync) {
-			return adapter.validateAsync(schema, data)
-		}
-		return adapter.validate(schema, data)
-	}
-
-	const is = <TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): boolean => {
-		const result = validate(schema, data)
-		return result.success
-	}
-
-	const assert = <TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): void => {
-		const result = validate(schema, data)
-		if (!result.success) {
-			throw new ValidationError(result.issues)
-		}
-	}
-
-	const parse = <TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): unknown => {
-		const result = validate(schema, data)
-		if (!result.success) {
-			throw new ValidationError(result.issues)
-		}
-		return result.data
-	}
-
-	const parseAsync = async <TSchema extends SupportedSchemas<TAdapters>>(
-		schema: TSchema,
-		data: unknown
-	): Promise<unknown> => {
-		const result = await validateAsync(schema, data)
-		if (!result.success) {
-			throw new ValidationError(result.issues)
-		}
-		return result.data
-	}
-
-	return {
-		validate,
-		validateAsync,
-		is,
-		assert,
-		parse,
-		parseAsync,
-		findAdapter,
-	}
-}
 
 // ============================================================================
 // Transformer Factory
@@ -221,11 +67,11 @@ function createContext<TAdapters extends readonly SchemaAdapter<any>[]>(
  * });
  *
  * // Works with Zod and Valibot schemas
- * toJsonSchema(zodSchema);      // ✓
- * toJsonSchema(valibotSchema);  // ✓
+ * toJsonSchema(zodSchema);      // OK
+ * toJsonSchema(valibotSchema);  // OK
  *
  * // TypeScript error - Yup not in adapters!
- * toJsonSchema(yupSchema);      // ✗ Type error
+ * toJsonSchema(yupSchema);      // Type error
  * ```
  */
 export function createTransformer<const TAdapters extends readonly SchemaAdapter<any>[]>(
@@ -237,7 +83,9 @@ export function createTransformer<const TAdapters extends readonly SchemaAdapter
 		return (adapters.find((a) => a.match(schema)) as SchemaAdapter<TSchema>) ?? null
 	}
 
-	const toJsonSchema = <TSchema extends SupportedSchemas<TAdapters>>(schema: TSchema): JSONSchema => {
+	const toJsonSchema = <TSchema extends SupportedSchemas<TAdapters>>(
+		schema: TSchema
+	): JSONSchema => {
 		// Try native toJsonSchema method first (ArkType)
 		if (typeof (schema as { toJsonSchema?: unknown }).toJsonSchema === 'function') {
 			return (schema as { toJsonSchema: () => JSONSchema }).toJsonSchema()

@@ -52,7 +52,11 @@ const getType = (s: ValibotSchema): string => s.type
 const getPipe = (s: ValibotSchema): ValibotPipeItem[] => s.pipe ?? []
 
 // Helper to find pipe item by kind/type
-const findPipeItem = (s: ValibotSchema, kind: string, type?: string): ValibotPipeItem | undefined => {
+const findPipeItem = (
+	s: ValibotSchema,
+	kind: string,
+	type?: string
+): ValibotPipeItem | undefined => {
 	return getPipe(s).find((p) => p.kind === kind && (!type || p.type === type))
 }
 
@@ -91,7 +95,8 @@ export const valibotAdapter = defineAdapter<ValibotSchema>({
 	isLazy: (s) => getType(s) === 'lazy',
 	isTransform: (s) => findPipeItem(s, 'transformation') !== undefined,
 	isRefine: (s) => findPipeItem(s, 'validation', 'custom') !== undefined,
-	isDefault: (s) => (getType(s) === 'optional' || getType(s) === 'nullable') && s.default !== undefined,
+	isDefault: (s) =>
+		(getType(s) === 'optional' || getType(s) === 'nullable') && s.default !== undefined,
 	isCatch: () => false, // Valibot doesn't have catch
 	isBranded: (s) => getType(s) === 'brand',
 	isDate: (s) => getType(s) === 'date',

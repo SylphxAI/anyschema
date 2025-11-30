@@ -88,8 +88,7 @@ export const typeboxAdapter = defineAdapter<TypeBoxSchema>({
 		)
 	},
 	isTuple: (s) => getType(s) === 'array' && Array.isArray(s.items),
-	isRecord: (s) =>
-		getType(s) === 'object' && s.additionalProperties !== undefined && !s.properties,
+	isRecord: (s) => getType(s) === 'object' && s.additionalProperties !== undefined && !s.properties,
 	isMap: () => false, // TypeBox uses Record for maps
 	isSet: () => false,
 	isIntersection: (s) => s.allOf !== undefined,

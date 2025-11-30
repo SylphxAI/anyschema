@@ -148,7 +148,9 @@ export const effectAdapter = defineAdapter<EffectSchema>({
 	getObjectEntries: (s) => {
 		if (getAstType(s) !== 'TypeLiteral') return []
 		const props = getAst(s)?.propertySignatures ?? []
-		return props.map((p) => [String(p.name), { Type: null, Encoded: null, ast: p.type }] as [string, unknown])
+		return props.map(
+			(p) => [String(p.name), { Type: null, Encoded: null, ast: p.type }] as [string, unknown]
+		)
 	},
 
 	getArrayElement: (s) => {
