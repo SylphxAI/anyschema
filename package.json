@@ -65,7 +65,7 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3.8",
 		"@sylphx/biome-config": "^0.4.0",
-		"@sylphx/bump": "^1.4.6",
+		"@sylphx/bump": "^1.4.11",
 		"@sylphx/doctor": "^1.25.0",
 		"@sylphx/tsconfig": "^0.3.0",
 		"@types/node": "^22.15.32",
