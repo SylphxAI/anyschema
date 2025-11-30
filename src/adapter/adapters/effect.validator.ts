@@ -1,9 +1,8 @@
 /**
  * Effect Schema Validator Adapter
  *
- * Minimal adapter for validation only. ~30 lines.
- * Use this when you only need validation, not JSON Schema conversion.
- * Effect implements Standard Schema, so validation should go through ~standard.
+ * Minimal adapter for validation only.
+ * Uses dynamic import to avoid bundling @effect/schema.
  */
 
 import { defineValidatorAdapter } from '../types.js'
@@ -19,10 +18,32 @@ export interface EffectSchema {
 	ast: { _tag?: string }
 }
 
-// Type guard
+// Type guard - Effect schemas can be functions with ast property
 const isEffectSchema = (s: unknown): s is EffectSchema => {
-	if (!s || typeof s !== 'object') return false
+	if (!s) return false
+	// Effect schemas can be functions or objects
+	if (typeof s !== 'object' && typeof s !== 'function') return false
 	return 'Type' in s && 'Encoded' in s && 'ast' in s
+}
+
+// Module type for Effect Schema
+interface EffectSchemaModule {
+	decodeUnknownSync: (schema: EffectSchema) => (data: unknown) => unknown
+}
+
+// Lazy-loaded Schema module
+let SchemaModule: EffectSchemaModule | null = null
+
+const loadSchemaModule = async (): Promise<EffectSchemaModule | null> => {
+	if (!SchemaModule) {
+		try {
+			const mod = await import('@effect/schema/Schema')
+			SchemaModule = mod as unknown as EffectSchemaModule
+		} catch {
+			return null
+		}
+	}
+	return SchemaModule
 }
 
 // ============================================================================
@@ -32,24 +53,56 @@ const isEffectSchema = (s: unknown): s is EffectSchema => {
 export const effectValidator = defineValidatorAdapter<EffectSchema>({
 	vendor: 'effect',
 	match: isEffectSchema,
-	// Effect implements Standard Schema, should use ~standard.validate
-	validate: (_s, _data) => ({
-		success: false,
-		issues: [
-			{
-				message:
-					'Effect Schema should be validated via Standard Schema protocol (~standard.validate).',
-			},
-		],
-	}),
 
-	validateAsync: async (_s, _data) => ({
-		success: false,
-		issues: [
-			{
-				message:
-					'Effect Schema should be validated via Standard Schema protocol (~standard.validate).',
-			},
-		],
-	}),
+	validate: (s, data) => {
+		// Try to use globally available module if loaded
+		if (SchemaModule) {
+			try {
+				const result = SchemaModule.decodeUnknownSync(s)(data)
+				return { success: true as const, data: result }
+			} catch (error) {
+				const effectError = error as { message?: string }
+				return {
+					success: false as const,
+					issues: [{ message: effectError.message ?? 'Validation failed' }],
+				}
+			}
+		}
+
+		// Try dynamic require for sync validation
+		try {
+			// eslint-disable-next-line @typescript-eslint/no-require-imports
+			const mod = require('@effect/schema/Schema') as EffectSchemaModule
+			SchemaModule = mod
+			const result = mod.decodeUnknownSync(s)(data)
+			return { success: true as const, data: result }
+		} catch (error) {
+			const effectError = error as { message?: string }
+			return {
+				success: false as const,
+				issues: [{ message: effectError.message ?? 'Validation failed' }],
+			}
+		}
+	},
+
+	validateAsync: async (s, data) => {
+		await loadSchemaModule()
+		if (!SchemaModule) {
+			return {
+				success: false as const,
+				issues: [{ message: 'Effect Schema requires @effect/schema' }],
+			}
+		}
+
+		try {
+			const result = SchemaModule.decodeUnknownSync(s)(data)
+			return { success: true as const, data: result }
+		} catch (error) {
+			const effectError = error as { message?: string }
+			return {
+				success: false as const,
+				issues: [{ message: effectError.message ?? 'Validation failed' }],
+			}
+		}
+	},
 })

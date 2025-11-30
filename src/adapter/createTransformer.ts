@@ -91,6 +91,17 @@ export function createTransformer<const TAdapters extends readonly TransformerAd
 			return (schema as { toJsonSchema: () => JSONSchema }).toJsonSchema()
 		}
 
+		// TypeBox schemas ARE JSON Schema - pass through directly
+		const TypeBoxKind = Symbol.for('TypeBox.Kind')
+		if (schema && typeof schema === 'object' && TypeBoxKind in schema) {
+			// Clone and remove TypeBox internal properties
+			const result = { ...schema } as Record<string | symbol, unknown>
+			delete result[TypeBoxKind]
+			delete result['static']
+			delete result['params']
+			return result as JSONSchema
+		}
+
 		const ctx = createContext(adapters)
 		const result = transform(schema, ctx)
 
@@ -132,6 +143,9 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 		return { $ref: `#/$defs/${refName}` }
 	}
 
+	// Track if nullable was handled via unwrap
+	let nullableHandledViaUnwrap = false
+
 	// Unwrap wrapper types (optional, nullable, transform, etc.)
 	const unwrapped = adapter.unwrap(schema)
 	if (unwrapped !== null) {
@@ -152,6 +166,7 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 
 		// Handle nullable
 		if (adapter.isNullable(schema)) {
+			nullableHandledViaUnwrap = true
 			const inner = transform(unwrapped, ctx)
 			return {
 				anyOf: [inner, { type: 'null' }],
@@ -183,6 +198,15 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 		}
 	}
 
+	// Check if nullable but wasn't handled via unwrap (flag-based nullable like Yup)
+	const needsNullableWrap = !nullableHandledViaUnwrap && adapter.isNullable(schema)
+
+	// Helper to wrap with nullable if needed
+	const wrapNullable = (result: JSONSchema): JSONSchema => {
+		if (!needsNullableWrap) return result
+		return { anyOf: [result, { type: 'null' }] }
+	}
+
 	// Get metadata
 	const description = adapter.getDescription(schema)
 	const title = adapter.getTitle(schema)
@@ -197,23 +221,23 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 
 	// Primitives
 	if (adapter.isString(schema)) {
-		return {
+		return wrapNullable({
 			type: 'string',
 			...meta,
 			...constraintsToJsonSchema(adapter.getConstraints(schema), 'string'),
-		}
+		})
 	}
 
 	if (adapter.isNumber(schema)) {
-		return {
+		return wrapNullable({
 			type: 'number',
 			...meta,
 			...constraintsToJsonSchema(adapter.getConstraints(schema), 'number'),
-		}
+		})
 	}
 
 	if (adapter.isBoolean(schema)) {
-		return { type: 'boolean', ...meta }
+		return wrapNullable({ type: 'boolean', ...meta })
 	}
 
 	if (adapter.isNull(schema)) {
@@ -234,24 +258,24 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 
 	// Date
 	if (adapter.isDate(schema)) {
-		return { type: 'string', format: 'date-time', ...meta }
+		return wrapNullable({ type: 'string', format: 'date-time', ...meta })
 	}
 
 	// BigInt
 	if (adapter.isBigInt(schema)) {
-		return { type: 'integer', ...meta }
+		return wrapNullable({ type: 'integer', ...meta })
 	}
 
 	// Literal
 	if (adapter.isLiteral(schema)) {
 		const value = adapter.getLiteralValue(schema)
-		return { const: value, ...meta }
+		return wrapNullable({ const: value, ...meta })
 	}
 
 	// Enum
 	if (adapter.isEnum(schema)) {
 		const values = adapter.getEnumValues(schema)
-		return { enum: values, ...meta }
+		return wrapNullable({ enum: values, ...meta })
 	}
 
 	// Object
@@ -271,84 +295,84 @@ function transform<TAdapters extends readonly TransformerAdapter<any>[]>(
 			}
 		}
 
-		return {
+		return wrapNullable({
 			type: 'object',
 			properties,
 			...(required.length > 0 ? { required } : {}),
 			...meta,
-		}
+		})
 	}
 
 	// Array
 	if (adapter.isArray(schema)) {
 		const element = adapter.getArrayElement(schema)
-		return {
+		return wrapNullable({
 			type: 'array',
 			items: element ? transform(element, ctx) : {},
 			...meta,
 			...constraintsToJsonSchema(adapter.getConstraints(schema), 'array'),
-		}
+		})
 	}
 
 	// Tuple
 	if (adapter.isTuple(schema)) {
 		const items = adapter.getTupleItems(schema)
-		return {
+		return wrapNullable({
 			type: 'array',
 			prefixItems: items.map((item) => transform(item, ctx)),
 			minItems: items.length,
 			maxItems: items.length,
 			...meta,
-		}
+		})
 	}
 
 	// Union
 	if (adapter.isUnion(schema)) {
 		const options = adapter.getUnionOptions(schema)
-		return {
+		return wrapNullable({
 			anyOf: options.map((opt) => transform(opt, ctx)),
 			...meta,
-		}
+		})
 	}
 
 	// Intersection
 	if (adapter.isIntersection(schema)) {
 		const schemas = adapter.getIntersectionSchemas(schema)
-		return {
+		return wrapNullable({
 			allOf: schemas.map((s) => transform(s, ctx)),
 			...meta,
-		}
+		})
 	}
 
 	// Record
 	if (adapter.isRecord(schema)) {
 		const valueType = adapter.getRecordValueType(schema)
-		return {
+		return wrapNullable({
 			type: 'object',
 			additionalProperties: valueType ? transform(valueType, ctx) : {},
 			...meta,
-		}
+		})
 	}
 
 	// Map
 	if (adapter.isMap(schema)) {
 		const valueType = adapter.getMapValueType(schema)
-		return {
+		return wrapNullable({
 			type: 'object',
 			additionalProperties: valueType ? transform(valueType, ctx) : {},
 			...meta,
-		}
+		})
 	}
 
 	// Set
 	if (adapter.isSet(schema)) {
 		const element = adapter.getSetElement(schema)
-		return {
+		return wrapNullable({
 			type: 'array',
 			uniqueItems: true,
 			items: element ? transform(element, ctx) : {},
 			...meta,
-		}
+		})
 	}
 
 	// Promise - unwrap to inner type

@@ -13,9 +13,21 @@ import { defineTransformerAdapter } from '../types.js'
 
 /** Runtypes schema shape for type inference */
 export interface RuntypesSchema {
-	reflect: RuntypesReflect
+	tag?: string
 	check: (x: unknown) => unknown
 	guard: (x: unknown) => boolean
+	// Properties may be at top level or nested
+	underlying?: unknown
+	entity?: unknown
+	fields?: Record<string, unknown>
+	element?: unknown
+	alternatives?: unknown[]
+	value?: unknown
+	components?: unknown[]
+	key?: unknown
+	intersectees?: unknown[]
+	ctor?: unknown
+	reflect?: RuntypesReflect
 }
 
 interface RuntypesReflect {
@@ -27,20 +39,25 @@ interface RuntypesReflect {
 	alternatives?: unknown[]
 	value?: unknown
 	components?: unknown[]
-	key?: unknown
+	key?: unknown // For Record type, contains field schemas
 	intersectees?: unknown[]
 	ctor?: unknown
+	isExact?: boolean
 }
 
 // Type guard
 const isRuntypesSchema = (s: unknown): s is RuntypesSchema => {
 	if (!s || typeof s !== 'object') return false
-	return 'reflect' in s && 'check' in s && 'guard' in s
+	// Runtypes has check and guard methods
+	return 'check' in s && 'guard' in s
 }
 
-// Helpers
-const getReflect = (s: RuntypesSchema): RuntypesReflect => s.reflect
-const getTag = (s: RuntypesSchema): string | null => s.reflect?.tag ?? null
+// Helpers - try direct properties first, then reflect
+const getTag = (s: RuntypesSchema): string | null => s.tag ?? s.reflect?.tag ?? null
+const getProp = <K extends keyof RuntypesReflect>(
+	s: RuntypesSchema,
+	key: K
+): RuntypesReflect[K] | null => (s as unknown as RuntypesReflect)[key] ?? s.reflect?.[key] ?? null
 
 // ============================================================================
 // Transformer Adapter
@@ -54,13 +71,13 @@ export const runtypesTransformer = defineTransformerAdapter<RuntypesSchema>({
 	isString: (s) => getTag(s) === 'string',
 	isNumber: (s) => getTag(s) === 'number',
 	isBoolean: (s) => getTag(s) === 'boolean',
-	isNull: (s) => getTag(s) === 'null',
+	isNull: (s) => getTag(s) === 'literal' && getProp(s, 'value') === null,
 	isUndefined: (s) => getTag(s) === 'undefined',
 	isVoid: (s) => getTag(s) === 'void',
 	isAny: () => false, // Runtypes doesn't have any
 	isUnknown: (s) => getTag(s) === 'unknown',
 	isNever: (s) => getTag(s) === 'never',
-	isObject: (s) => getTag(s) === 'record',
+	isObject: (s) => getTag(s) === 'object' || getTag(s) === 'record',
 	isArray: (s) => getTag(s) === 'array',
 	isUnion: (s) => getTag(s) === 'union',
 	isLiteral: (s) => getTag(s) === 'literal',
@@ -87,60 +104,68 @@ export const runtypesTransformer = defineTransformerAdapter<RuntypesSchema>({
 
 	// ============ Unwrap ============
 	unwrap: (s) => {
-		const reflect = getReflect(s)
 		const tag = getTag(s)
 
 		// Optional has underlying
-		if (tag === 'optional') return reflect.underlying ?? null
+		if (tag === 'optional') return getProp(s, 'underlying')
 
 		// Constraint has underlying
-		if (tag === 'constraint') return reflect.underlying ?? null
+		if (tag === 'constraint') return getProp(s, 'underlying')
 
 		// Brand has entity
-		if (tag === 'brand') return reflect.entity ?? null
+		if (tag === 'brand') return getProp(s, 'entity')
 
 		// Lazy has underlying (resolved)
-		if (tag === 'lazy') return reflect.underlying ?? null
+		if (tag === 'lazy') return getProp(s, 'underlying')
 
 		return null
 	},
 
 	// ============ Extract ============
 	getObjectEntries: (s) => {
-		if (getTag(s) !== 'record') return []
-		return getReflect(s).fields ? Object.entries(getReflect(s).fields!) : []
+		const tag = getTag(s)
+		if (tag === 'object') {
+			const fields = getProp(s, 'fields')
+			return fields ? Object.entries(fields) : []
+		}
+		if (tag === 'record') {
+			// Runtypes Record uses 'key' for field schemas
+			const fields = getProp(s, 'key')
+			return fields ? Object.entries(fields) : []
+		}
+		return []
 	},
 
 	getArrayElement: (s) => {
 		if (getTag(s) !== 'array') return null
-		return getReflect(s).element ?? null
+		return getProp(s, 'element')
 	},
 
 	getUnionOptions: (s) => {
 		if (getTag(s) !== 'union') return []
-		return getReflect(s).alternatives ?? []
+		return getProp(s, 'alternatives') ?? []
 	},
 
 	getLiteralValue: (s) => {
 		if (getTag(s) !== 'literal') return undefined
-		return getReflect(s).value
+		return getProp(s, 'value')
 	},
 
 	getEnumValues: () => [],
 
 	getTupleItems: (s) => {
 		if (getTag(s) !== 'tuple') return []
-		return getReflect(s).components ?? []
+		return getProp(s, 'components') ?? []
 	},
 
 	getRecordKeyType: (s) => {
 		if (getTag(s) !== 'dictionary') return null
-		return getReflect(s).key ?? null
+		return getProp(s, 'key')
 	},
 
 	getRecordValueType: (s) => {
 		if (getTag(s) !== 'dictionary') return null
-		return getReflect(s).value ?? null
+		return getProp(s, 'value')
 	},
 
 	getMapKeyType: () => null,
@@ -149,14 +174,14 @@ export const runtypesTransformer = defineTransformerAdapter<RuntypesSchema>({
 
 	getIntersectionSchemas: (s) => {
 		if (getTag(s) !== 'intersect') return []
-		return getReflect(s).intersectees ?? []
+		return getProp(s, 'intersectees') ?? []
 	},
 
 	getPromiseInner: () => null,
 
 	getInstanceOfClass: (s) => {
 		if (getTag(s) !== 'instanceof') return null
-		return getReflect(s).ctor ?? null
+		return getProp(s, 'ctor')
 	},
 
 	// ============ Constraints ============

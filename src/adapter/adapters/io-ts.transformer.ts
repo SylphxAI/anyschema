@@ -61,8 +61,8 @@ export const ioTsTransformer = defineTransformerAdapter<IoTsSchema>({
 		getTag(s) === 'StrictType',
 	isArray: (s) => getTag(s) === 'ArrayType' || getTag(s) === 'ReadonlyArrayType',
 	isUnion: (s) => getTag(s) === 'UnionType',
-	isLiteral: (s) => getTag(s) === 'LiteralType' || getTag(s) === 'KeyofType',
-	isEnum: () => false, // io-ts uses union of literals
+	isLiteral: (s) => getTag(s) === 'LiteralType',
+	isEnum: (s) => getTag(s) === 'KeyofType', // io-ts keyof is like enum
 	isOptional: () => false, // io-ts uses union with undefined
 	isNullable: () => false, // io-ts uses union with null
 	isTuple: (s) => getTag(s) === 'TupleType',
@@ -128,7 +128,12 @@ export const ioTsTransformer = defineTransformerAdapter<IoTsSchema>({
 		return s.value
 	},
 
-	getEnumValues: () => [],
+	getEnumValues: (s) => {
+		if (getTag(s) !== 'KeyofType') return []
+		// KeyofType has keys property
+		const keys = (s as unknown as { keys: Record<string, unknown> }).keys
+		return keys ? Object.keys(keys) : []
+	},
 
 	getTupleItems: (s) => {
 		if (getTag(s) !== 'TupleType') return []
@@ -162,7 +167,23 @@ export const ioTsTransformer = defineTransformerAdapter<IoTsSchema>({
 
 	// ============ Metadata ============
 	getDescription: () => undefined,
-	getTitle: (s) => getName(s) ?? undefined,
+	getTitle: (s) => {
+		const name = getName(s)
+		// Don't use primitive type names as titles - they're not useful
+		if (!name) return undefined
+		const primitives = [
+			'string',
+			'number',
+			'boolean',
+			'null',
+			'undefined',
+			'void',
+			'unknown',
+			'any',
+		]
+		if (primitives.includes(name)) return undefined
+		return name
+	},
 	getDefault: () => undefined,
 	getExamples: () => undefined,
 	isDeprecated: () => false,

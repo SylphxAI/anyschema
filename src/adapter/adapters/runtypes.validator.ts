@@ -14,15 +14,15 @@ import { defineValidatorAdapter } from '../types.js'
 
 /** Runtypes schema shape for type inference */
 export interface RuntypesSchema {
-	reflect: { tag?: string }
+	tag?: string
 	check: (x: unknown) => unknown
 	guard: (x: unknown) => boolean
 }
 
-// Type guard
+// Type guard - Runtypes has check and guard methods
 const isRuntypesSchema = (s: unknown): s is RuntypesSchema => {
 	if (!s || typeof s !== 'object') return false
-	return 'reflect' in s && 'check' in s && 'guard' in s
+	return 'check' in s && 'guard' in s
 }
 
 // ============================================================================

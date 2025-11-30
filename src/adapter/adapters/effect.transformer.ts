@@ -33,9 +33,11 @@ interface EffectAst {
 	annotations?: Record<symbol, unknown>
 }
 
-// Type guard
+// Type guard - Effect schemas can be functions with ast property
 const isEffectSchema = (s: unknown): s is EffectSchema => {
-	if (!s || typeof s !== 'object') return false
+	if (!s) return false
+	// Effect schemas can be functions or objects
+	if (typeof s !== 'object' && typeof s !== 'function') return false
 	return 'Type' in s && 'Encoded' in s && 'ast' in s
 }
 

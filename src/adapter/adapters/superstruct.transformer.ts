@@ -129,6 +129,10 @@ export const superstructTransformer = defineTransformerAdapter<SuperstructSchema
 	getEnumValues: (s) => {
 		if (getType(s) !== 'enums') return []
 		const schema = getSchema(s)
+		// Superstruct enums uses an object {value: value} format
+		if (schema && typeof schema === 'object' && !Array.isArray(schema)) {
+			return Object.values(schema as Record<string, unknown>)
+		}
 		return Array.isArray(schema) ? schema : []
 	},
 

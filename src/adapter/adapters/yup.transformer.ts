@@ -14,9 +14,12 @@ import { defineTransformerAdapter, type SchemaConstraints } from '../types.js'
 /** Yup schema shape for type inference */
 export interface YupSchema {
 	__isYupSchema__: true
+	type?: string
 	spec?: YupSpec
 	fields?: Record<string, unknown>
 	types?: unknown[]
+	tests?: Array<{ OPTIONS?: { name?: string; params?: Record<string, unknown> } }>
+	innerType?: unknown // Array element type
 }
 
 interface YupSpec {
@@ -41,8 +44,8 @@ const isYupSchema = (s: unknown): s is YupSchema => {
 // Helper to get spec
 const getSpec = (s: YupSchema): YupSpec | null => s.spec ?? null
 
-// Helper to get type
-const getType = (s: YupSchema): string | null => getSpec(s)?.type ?? null
+// Helper to get type - Yup stores type directly on schema, not in spec
+const getType = (s: YupSchema): string | null => s.type ?? getSpec(s)?.type ?? null
 
 // ============================================================================
 // Transformer Adapter
@@ -94,11 +97,9 @@ export const yupTransformer = defineTransformerAdapter<YupSchema>({
 	isInstanceOf: () => false,
 
 	// ============ Unwrap ============
-	unwrap: (s) => {
-		const spec = getSpec(s)
-		if (!spec) return null
-		// innerType for array, nullable wrapper
-		if (spec.innerType) return spec.innerType
+	unwrap: (_s) => {
+		// Yup schemas are not wrapped - optional/nullable are flags, not wrappers
+		// Array innerType is handled by getArrayElement
 		return null
 	},
 
@@ -111,6 +112,8 @@ export const yupTransformer = defineTransformerAdapter<YupSchema>({
 	},
 
 	getArrayElement: (s) => {
+		// Yup stores innerType directly on schema
+		if (s.innerType) return s.innerType
 		const spec = getSpec(s)
 		return spec?.innerType ?? spec?.subType ?? null
 	},
@@ -137,11 +140,9 @@ export const yupTransformer = defineTransformerAdapter<YupSchema>({
 
 	// ============ Constraints ============
 	getConstraints: (s) => {
-		const spec = getSpec(s)
-		if (!spec) return null
-
 		const result: SchemaConstraints = {}
-		const tests = spec.tests ?? []
+		// Yup stores tests directly on schema, not in spec
+		const tests = s.tests ?? []
 
 		for (const test of tests) {
 			const name = test.OPTIONS?.name
