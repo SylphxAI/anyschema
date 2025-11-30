@@ -1,70 +1,35 @@
 import { describe, expectTypeOf, it } from 'vitest';
-import type {
-  WithToJsonSchema,
-  SupportedVendor,
-  ExtractVendor,
-  StandardSchemaWithVendor,
-  JSONSchema,
-} from '../src/index.js';
-import { toJsonSchema, toJsonSchemaAsync } from '../src/index.js';
+import type { z } from 'zod';
+import type * as v from 'valibot';
+import type { Type } from 'arktype';
+import type { JSONSchema } from '../src/types.js';
+import { toJsonSchema, toJsonSchemaSync } from '../src/index.js';
+import { toJsonSchema as zodToJsonSchema } from '../src/zod.js';
+import { toJsonSchema as valibotToJsonSchema } from '../src/valibot.js';
+import { toJsonSchema as arktypeToJsonSchema } from '../src/arktype.js';
 
-describe('WithToJsonSchema type', () => {
-  it('should accept schemas with supported vendors', () => {
-    type ZodSchema = StandardSchemaWithVendor<'zod'>;
-    type ValibotSchema = StandardSchemaWithVendor<'valibot'>;
-    type ArktypeSchema = StandardSchemaWithVendor<'arktype'>;
-
-    expectTypeOf<WithToJsonSchema<ZodSchema>>().toEqualTypeOf<ZodSchema>();
-    expectTypeOf<WithToJsonSchema<ValibotSchema>>().toEqualTypeOf<ValibotSchema>();
-    expectTypeOf<WithToJsonSchema<ArktypeSchema>>().toEqualTypeOf<ArktypeSchema>();
+describe('toJsonSchema types', () => {
+  it('should return Promise<JSONSchema> for async version', () => {
+    expectTypeOf(toJsonSchema).returns.toEqualTypeOf<Promise<JSONSchema>>();
   });
 
-  it('should reject schemas with unsupported vendors', () => {
-    type UnsupportedSchema = StandardSchemaWithVendor<'unknown-vendor'>;
-    type TypeboxSchema = StandardSchemaWithVendor<'typebox'>;
-    type EffectSchema = StandardSchemaWithVendor<'effect'>;
-
-    expectTypeOf<WithToJsonSchema<UnsupportedSchema>>().toBeNever();
-    expectTypeOf<WithToJsonSchema<TypeboxSchema>>().toBeNever();
-    expectTypeOf<WithToJsonSchema<EffectSchema>>().toBeNever();
+  it('should return JSONSchema for sync version', () => {
+    expectTypeOf(toJsonSchemaSync).returns.toEqualTypeOf<JSONSchema>();
   });
 });
 
-describe('ExtractVendor type', () => {
-  it('should extract vendor from schema', () => {
-    type ZodSchema = StandardSchemaWithVendor<'zod'>;
-
-    expectTypeOf<ExtractVendor<ZodSchema>>().toEqualTypeOf<'zod'>();
-  });
-});
-
-describe('toJsonSchema function types', () => {
-  it('should accept supported schemas', () => {
-    type ZodSchema = StandardSchemaWithVendor<'zod'>;
-
-    expectTypeOf(toJsonSchema<ZodSchema>).parameter(0).toEqualTypeOf<ZodSchema>();
-    expectTypeOf(toJsonSchema<ZodSchema>).returns.toEqualTypeOf<JSONSchema>();
-  });
-});
-
-describe('toJsonSchemaAsync function types', () => {
-  it('should return Promise<JSONSchema>', () => {
-    type ValibotSchema = StandardSchemaWithVendor<'valibot'>;
-
-    expectTypeOf(toJsonSchemaAsync<ValibotSchema>).returns.toEqualTypeOf<Promise<JSONSchema>>();
-  });
-});
-
-describe('SupportedVendor type', () => {
-  it('should include all supported vendors', () => {
-    expectTypeOf<'zod'>().toMatchTypeOf<SupportedVendor>();
-    expectTypeOf<'valibot'>().toMatchTypeOf<SupportedVendor>();
-    expectTypeOf<'arktype'>().toMatchTypeOf<SupportedVendor>();
+describe('Subpath export types', () => {
+  it('zodToJsonSchema should accept ZodType and return JSONSchema', () => {
+    expectTypeOf(zodToJsonSchema).parameter(0).toMatchTypeOf<z.ZodType>();
+    expectTypeOf(zodToJsonSchema).returns.toEqualTypeOf<JSONSchema>();
   });
 
-  it('should not include unsupported vendors', () => {
-    expectTypeOf<'unknown'>().not.toMatchTypeOf<SupportedVendor>();
-    expectTypeOf<'typebox'>().not.toMatchTypeOf<SupportedVendor>();
-    expectTypeOf<'effect'>().not.toMatchTypeOf<SupportedVendor>();
+  it('valibotToJsonSchema should accept Valibot schema and return JSONSchema', () => {
+    expectTypeOf(valibotToJsonSchema).returns.toEqualTypeOf<JSONSchema>();
+  });
+
+  it('arktypeToJsonSchema should accept Type and return JSONSchema', () => {
+    expectTypeOf(arktypeToJsonSchema).parameter(0).toMatchTypeOf<Type>();
+    expectTypeOf(arktypeToJsonSchema).returns.toEqualTypeOf<JSONSchema>();
   });
 });

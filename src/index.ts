@@ -1,59 +1,102 @@
-import type { StandardSchemaV1 } from '@standard-schema/spec';
-import type { JSONSchema } from './json-schema.js';
-import type { WithToJsonSchema } from './types.js';
-import { getVendor, supportsToJsonSchema } from './vendor.js';
-import { getSyncAdapter, getAsyncAdapter } from './adapters/index.js';
-
 /**
- * Convert a Standard Schema to JSON Schema (sync)
+ * Universal schema to JSON Schema converter
  *
- * This function automatically detects the schema vendor and calls
- * the appropriate toJsonSchema converter.
- *
- * @param schema - A Standard Schema from a supported vendor (zod, valibot, arktype, typebox, effect)
- * @returns JSON Schema representation of the input schema
- * @throws Error if the vendor is not supported or if the peer dependency is missing
+ * Supports Zod, Valibot, and ArkType with automatic detection.
  *
  * @example
  * ```typescript
- * import { z } from 'zod';
  * import { toJsonSchema } from 'standard-schema-to-json';
+ * import { z } from 'zod';
+ * import * as v from 'valibot';
+ * import { type } from 'arktype';
  *
- * const schema = z.object({
- *   name: z.string(),
- *   age: z.number(),
- * });
- *
- * const jsonSchema = toJsonSchema(schema);
- * // { type: 'object', properties: { name: { type: 'string' }, age: { type: 'number' } }, ... }
+ * // Auto-detect works with any supported schema
+ * await toJsonSchema(z.string());
+ * await toJsonSchema(v.string());
+ * await toJsonSchema(type('string'));
  * ```
  */
-export function toJsonSchema<T extends StandardSchemaV1>(
-  schema: WithToJsonSchema<T>
-): JSONSchema {
-  const vendor = getVendor(schema);
-  const adapter = getSyncAdapter(vendor);
 
-  if (!adapter) {
+// Type-only imports - erased at runtime
+import type { ZodType } from 'zod';
+import type { GenericSchema, GenericSchemaAsync } from 'valibot';
+import type { Type } from 'arktype';
+import type { JSONSchema, SchemaVendor } from './types.js';
+import { detectVendor } from './detection.js';
+
+// Re-export types
+export type { JSONSchema, SchemaVendor };
+export {
+  detectVendor,
+  isZodSchema,
+  isValibotSchema,
+  isArkTypeSchema,
+} from './detection.js';
+
+type ValibotSchema = GenericSchema | GenericSchemaAsync;
+type AnySchema = ZodType | ValibotSchema | Type;
+
+/**
+ * Convert any supported schema to JSON Schema
+ *
+ * Automatically detects the schema library and calls the appropriate converter.
+ * Uses dynamic imports for tree-shaking - only loads the converter you need.
+ *
+ * @param schema - A schema from Zod, Valibot, or ArkType
+ * @returns Promise resolving to JSON Schema
+ * @throws Error if schema type is not supported or peer dependency is missing
+ *
+ * @example
+ * ```typescript
+ * // Works with any supported schema library
+ * const jsonSchema = await toJsonSchema(z.object({ name: z.string() }));
+ * ```
+ */
+// Function overloads for type safety
+export function toJsonSchema(schema: ZodType): Promise<JSONSchema>;
+export function toJsonSchema(schema: ValibotSchema): Promise<JSONSchema>;
+export function toJsonSchema(schema: Type): Promise<JSONSchema>;
+export function toJsonSchema(schema: AnySchema): Promise<JSONSchema>;
+export async function toJsonSchema(schema: unknown): Promise<JSONSchema> {
+  const vendor = detectVendor(schema);
+
+  if (!vendor) {
     throw new Error(
-      `Unsupported vendor: "${vendor}". ` +
-        `Supported vendors are: zod, valibot, arktype`
+      'Unsupported schema type. Expected Zod, Valibot, or ArkType schema.'
     );
   }
 
   try {
-    return adapter(schema);
+    switch (vendor) {
+      case 'zod': {
+        const { toJsonSchemaAsync } = await import('./zod.js');
+        return toJsonSchemaAsync(schema as ZodType);
+      }
+      case 'valibot': {
+        const { toJsonSchemaAsync } = await import('./valibot.js');
+        return toJsonSchemaAsync(schema as ValibotSchema);
+      }
+      case 'arktype': {
+        const { toJsonSchemaAsync } = await import('./arktype.js');
+        return toJsonSchemaAsync(schema as Type);
+      }
+    }
   } catch (error) {
-    // Check if it's a module not found error (missing peer dependency)
     if (
       error instanceof Error &&
       (error.message.includes('Cannot find module') ||
         error.message.includes('MODULE_NOT_FOUND'))
     ) {
+      const peerDep =
+        vendor === 'zod'
+          ? 'zod-to-json-schema'
+          : vendor === 'valibot'
+            ? '@valibot/to-json-schema'
+            : 'arktype';
+
       throw new Error(
-        `Missing peer dependency for vendor "${vendor}". ` +
-          `Please install the required packages. ` +
-          `See documentation for the list of peer dependencies.`,
+        `Missing peer dependency: ${peerDep}. ` +
+          `Please install it: npm install ${peerDep}`,
         { cause: error }
       );
     }
@@ -62,95 +105,66 @@ export function toJsonSchema<T extends StandardSchemaV1>(
 }
 
 /**
- * Convert a Standard Schema to JSON Schema (async)
+ * Synchronous version - converts any supported schema to JSON Schema
  *
- * This function automatically detects the schema vendor and calls
- * the appropriate toJsonSchema converter using dynamic imports.
+ * Note: Uses require() which may not work in all environments.
+ * Prefer the async version (toJsonSchema) for better compatibility.
  *
- * @param schema - A Standard Schema from a supported vendor (zod, valibot, arktype, typebox, effect)
- * @returns Promise resolving to JSON Schema representation of the input schema
- * @throws Error if the vendor is not supported or if the peer dependency is missing
- *
- * @example
- * ```typescript
- * import * as v from 'valibot';
- * import { toJsonSchemaAsync } from 'standard-schema-to-json';
- *
- * const schema = v.object({
- *   name: v.string(),
- *   age: v.number(),
- * });
- *
- * const jsonSchema = await toJsonSchemaAsync(schema);
- * // { type: 'object', properties: { name: { type: 'string' }, age: { type: 'number' } }, ... }
- * ```
+ * @param schema - A schema from Zod, Valibot, or ArkType
+ * @returns JSON Schema
  */
-export async function toJsonSchemaAsync<T extends StandardSchemaV1>(
-  schema: WithToJsonSchema<T>
-): Promise<JSONSchema> {
-  const vendor = getVendor(schema);
+export function toJsonSchemaSync(schema: ZodType): JSONSchema;
+export function toJsonSchemaSync(schema: ValibotSchema): JSONSchema;
+export function toJsonSchemaSync(schema: Type): JSONSchema;
+export function toJsonSchemaSync(schema: AnySchema): JSONSchema;
+export function toJsonSchemaSync(schema: unknown): JSONSchema {
+  const vendor = detectVendor(schema);
+
+  if (!vendor) {
+    throw new Error(
+      'Unsupported schema type. Expected Zod, Valibot, or ArkType schema.'
+    );
+  }
 
   try {
-    const adapter = await getAsyncAdapter(vendor);
-
-    if (!adapter) {
-      throw new Error(
-        `Unsupported vendor: "${vendor}". ` +
-          `Supported vendors are: zod, valibot, arktype`
-      );
+    switch (vendor) {
+      case 'zod': {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { zodToJsonSchema } = require('zod-to-json-schema') as {
+          zodToJsonSchema: (s: unknown) => JSONSchema;
+        };
+        return zodToJsonSchema(schema);
+      }
+      case 'valibot': {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const mod = require('@valibot/to-json-schema') as {
+          toJsonSchema: (s: unknown) => JSONSchema;
+        };
+        return mod.toJsonSchema(schema);
+      }
+      case 'arktype': {
+        return (schema as Type).toJsonSchema() as JSONSchema;
+      }
     }
-
-    return await adapter(schema);
   } catch (error) {
-    // Check if it's a module not found error (missing peer dependency)
     if (
       error instanceof Error &&
       (error.message.includes('Cannot find module') ||
-        error.message.includes('Failed to resolve module'))
+        error.message.includes('MODULE_NOT_FOUND'))
     ) {
+      const peerDep =
+        vendor === 'zod'
+          ? 'zod-to-json-schema'
+          : vendor === 'valibot'
+            ? '@valibot/to-json-schema'
+            : 'arktype';
+
       throw new Error(
-        `Missing peer dependency for vendor "${vendor}". ` +
-          `Please install the required packages. ` +
-          `See documentation for the list of peer dependencies.`,
+        `Missing peer dependency: ${peerDep}. ` +
+          `Please install it: npm install ${peerDep}`,
         { cause: error }
       );
     }
     throw error;
   }
 }
-
-// Re-export types
-export type {
-  JSONSchema,
-  JSONSchemaType,
-} from './json-schema.js';
-
-export type {
-  SupportedVendor,
-  WithToJsonSchema,
-  StandardSchemaWithVendor,
-  SupportedStandardSchema,
-  InferInput,
-  InferOutput,
-  ExtractVendor,
-} from './types.js';
-
-export { SUPPORTED_VENDORS } from './types.js';
-
-// Re-export vendor utilities
-export {
-  getVendor,
-  isSupportedVendor,
-  supportsToJsonSchema,
-  normalizeVendor,
-} from './vendor.js';
-
-// Re-export individual adapters for direct use
-export {
-  zodToJsonSchemaSync,
-  zodToJsonSchemaAsync,
-  valibotToJsonSchemaSync,
-  valibotToJsonSchemaAsync,
-  arktypeToJsonSchemaSync,
-  arktypeToJsonSchemaAsync,
-} from './adapters/index.js';

@@ -1,7 +1,7 @@
 {
   "name": "standard-schema-to-json",
-  "version": "0.1.0",
-  "description": "Convert Standard Schema to JSON Schema with automatic vendor detection",
+  "version": "0.2.0",
+  "description": "Convert any schema (Zod, Valibot, ArkType) to JSON Schema with zero dependencies",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -15,6 +15,36 @@
       "require": {
         "types": "./dist/index.d.cts",
         "default": "./dist/index.cjs"
+      }
+    },
+    "./zod": {
+      "import": {
+        "types": "./dist/zod.d.ts",
+        "default": "./dist/zod.js"
+      },
+      "require": {
+        "types": "./dist/zod.d.cts",
+        "default": "./dist/zod.cjs"
+      }
+    },
+    "./valibot": {
+      "import": {
+        "types": "./dist/valibot.d.ts",
+        "default": "./dist/valibot.js"
+      },
+      "require": {
+        "types": "./dist/valibot.d.cts",
+        "default": "./dist/valibot.cjs"
+      }
+    },
+    "./arktype": {
+      "import": {
+        "types": "./dist/arktype.d.ts",
+        "default": "./dist/arktype.js"
+      },
+      "require": {
+        "types": "./dist/arktype.d.cts",
+        "default": "./dist/arktype.cjs"
       }
     }
   },
@@ -30,19 +60,16 @@
     "prepublishOnly": "npm run build"
   },
   "keywords": [
-    "standard-schema",
     "json-schema",
     "zod",
     "valibot",
     "arktype",
     "schema",
-    "validation"
+    "validation",
+    "converter"
   ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "@standard-schema/spec": "^1.0.0"
-  },
   "devDependencies": {
     "@types/node": "^22.15.32",
     "@valibot/to-json-schema": "^1.0.0",
@@ -55,20 +82,12 @@
     "zod-to-json-schema": "^3.24.5"
   },
   "peerDependencies": {
+    "zod-to-json-schema": ">=3.0.0",
     "@valibot/to-json-schema": ">=1.0.0",
-    "arktype": ">=2.0.0",
-    "valibot": ">=1.0.0",
-    "zod": ">=3.0.0",
-    "zod-to-json-schema": ">=3.0.0"
+    "arktype": ">=2.0.0"
   },
   "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    },
     "zod-to-json-schema": {
-      "optional": true
-    },
-    "valibot": {
       "optional": true
     },
     "@valibot/to-json-schema": {

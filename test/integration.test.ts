@@ -5,170 +5,155 @@ import { type } from 'arktype';
 
 import {
   toJsonSchema,
-  toJsonSchemaAsync,
-  supportsToJsonSchema,
-  isSupportedVendor,
-  getVendor,
-  normalizeVendor,
-  SUPPORTED_VENDORS,
+  toJsonSchemaSync,
+  detectVendor,
+  isZodSchema,
+  isValibotSchema,
+  isArkTypeSchema,
 } from '../src/index.js';
 
-describe('toJsonSchema', () => {
-  describe('Zod', () => {
-    it('should convert a simple zod string schema', () => {
-      const schema = z.string();
-      const jsonSchema = toJsonSchema(schema);
+// Subpath imports
+import { toJsonSchema as zodToJsonSchema } from '../src/zod.js';
+import { toJsonSchema as valibotToJsonSchema } from '../src/valibot.js';
+import { toJsonSchema as arktypeToJsonSchema } from '../src/arktype.js';
 
-      expect(jsonSchema).toBeDefined();
-      expect(jsonSchema.type).toBe('string');
-    });
+describe('Auto-detect toJsonSchema (async)', () => {
+  it('should convert Zod schema', async () => {
+    const schema = z.object({ name: z.string(), age: z.number() });
+    const result = await toJsonSchema(schema);
 
-    it('should convert a zod object schema', () => {
-      const schema = z.object({
-        name: z.string(),
-        age: z.number(),
-      });
-      const jsonSchema = toJsonSchema(schema);
+    expect(result).toBeDefined();
+    expect(result.type).toBe('object');
+    expect(result.properties).toHaveProperty('name');
+    expect(result.properties).toHaveProperty('age');
+  });
 
-      expect(jsonSchema).toBeDefined();
-      expect(jsonSchema.type).toBe('object');
-      expect(jsonSchema.properties).toHaveProperty('name');
-      expect(jsonSchema.properties).toHaveProperty('age');
-    });
+  it('should convert Valibot schema', async () => {
+    const schema = v.object({ name: v.string(), age: v.number() });
+    const result = await toJsonSchema(schema);
 
-    it('should handle zod constraints', () => {
-      const schema = z.string().min(1).max(100);
-      const jsonSchema = toJsonSchema(schema);
+    expect(result).toBeDefined();
+    expect(result.type).toBe('object');
+    expect(result.properties).toHaveProperty('name');
+    expect(result.properties).toHaveProperty('age');
+  });
 
-      expect(jsonSchema.type).toBe('string');
-      expect(jsonSchema.minLength).toBe(1);
-      expect(jsonSchema.maxLength).toBe(100);
+  it('should convert ArkType schema', async () => {
+    const schema = type({ name: 'string', age: 'number' });
+    const result = await toJsonSchema(schema);
+
+    expect(result).toBeDefined();
+    expect(result.type).toBe('object');
+    expect(result.properties).toHaveProperty('name');
+    expect(result.properties).toHaveProperty('age');
+  });
+
+  it('should throw for unsupported schema', async () => {
+    await expect(toJsonSchema({} as any)).rejects.toThrow('Unsupported schema type');
+  });
+});
+
+describe('Auto-detect toJsonSchemaSync', () => {
+  it('should convert Zod schema', () => {
+    const schema = z.string();
+    const result = toJsonSchemaSync(schema);
+
+    expect(result).toBeDefined();
+    expect(result.type).toBe('string');
+  });
+
+  it('should convert Valibot schema', () => {
+    const schema = v.string();
+    const result = toJsonSchemaSync(schema);
+
+    expect(result).toBeDefined();
+    expect(result.type).toBe('string');
+  });
+
+  it('should convert ArkType schema', () => {
+    const schema = type('string');
+    const result = toJsonSchemaSync(schema);
+
+    expect(result).toBeDefined();
+    expect(result.type).toBe('string');
+  });
+});
+
+describe('Subpath exports', () => {
+  describe('standard-schema-to-json/zod', () => {
+    it('should convert Zod schema', () => {
+      const schema = z.object({ name: z.string() });
+      const result = zodToJsonSchema(schema);
+
+      expect(result.type).toBe('object');
+      expect(result.properties).toHaveProperty('name');
     });
   });
 
-  describe('Valibot', () => {
-    it('should convert a simple valibot string schema', async () => {
-      const schema = v.string();
-      const jsonSchema = await toJsonSchemaAsync(schema);
+  describe('standard-schema-to-json/valibot', () => {
+    it('should convert Valibot schema', () => {
+      const schema = v.object({ name: v.string() });
+      const result = valibotToJsonSchema(schema);
 
-      expect(jsonSchema).toBeDefined();
-      expect(jsonSchema.type).toBe('string');
-    });
-
-    it('should convert a valibot object schema', async () => {
-      const schema = v.object({
-        name: v.string(),
-        age: v.number(),
-      });
-      const jsonSchema = await toJsonSchemaAsync(schema);
-
-      expect(jsonSchema).toBeDefined();
-      expect(jsonSchema.type).toBe('object');
-      expect(jsonSchema.properties).toHaveProperty('name');
-      expect(jsonSchema.properties).toHaveProperty('age');
+      expect(result.type).toBe('object');
+      expect(result.properties).toHaveProperty('name');
     });
   });
 
-  describe('ArkType', () => {
-    it('should convert a simple arktype string schema', () => {
-      const schema = type('string');
-      const jsonSchema = toJsonSchema(schema);
+  describe('standard-schema-to-json/arktype', () => {
+    it('should convert ArkType schema', () => {
+      const schema = type({ name: 'string' });
+      const result = arktypeToJsonSchema(schema);
 
-      expect(jsonSchema).toBeDefined();
-      expect(jsonSchema.type).toBe('string');
-    });
-
-    it('should convert an arktype object schema', () => {
-      const schema = type({
-        name: 'string',
-        age: 'number',
-      });
-      const jsonSchema = toJsonSchema(schema);
-
-      expect(jsonSchema).toBeDefined();
-      expect(jsonSchema.type).toBe('object');
-      expect(jsonSchema.properties).toHaveProperty('name');
-      expect(jsonSchema.properties).toHaveProperty('age');
+      expect(result.type).toBe('object');
+      expect(result.properties).toHaveProperty('name');
     });
   });
 });
 
-describe('toJsonSchemaAsync', () => {
-  it('should work with all supported vendors', async () => {
-    const zodSchema = z.string();
-    const valibotSchema = v.string();
-    const arktypeSchema = type('string');
-
-    const results = await Promise.all([
-      toJsonSchemaAsync(zodSchema),
-      toJsonSchemaAsync(valibotSchema),
-      toJsonSchemaAsync(arktypeSchema),
-    ]);
-
-    results.forEach((result) => {
-      expect(result).toBeDefined();
-      expect(result.type).toBe('string');
+describe('Detection utilities', () => {
+  describe('detectVendor', () => {
+    it('should detect Zod schema', () => {
+      expect(detectVendor(z.string())).toBe('zod');
+      expect(detectVendor(z.object({ a: z.number() }))).toBe('zod');
     });
-  });
-});
 
-describe('supportsToJsonSchema', () => {
-  it('should return true for supported schemas', () => {
-    expect(supportsToJsonSchema(z.string())).toBe(true);
-    expect(supportsToJsonSchema(v.string())).toBe(true);
-    expect(supportsToJsonSchema(type('string'))).toBe(true);
-  });
-});
+    it('should detect Valibot schema', () => {
+      expect(detectVendor(v.string())).toBe('valibot');
+      expect(detectVendor(v.object({ a: v.number() }))).toBe('valibot');
+    });
 
-describe('vendor utilities', () => {
-  describe('getVendor', () => {
-    it('should extract vendor from schemas', () => {
-      expect(getVendor(z.string())).toBe('zod');
-      expect(getVendor(v.string())).toBe('valibot');
-      expect(getVendor(type('string'))).toBe('arktype');
+    it('should detect ArkType schema', () => {
+      expect(detectVendor(type('string'))).toBe('arktype');
+      expect(detectVendor(type({ a: 'number' }))).toBe('arktype');
+    });
+
+    it('should return null for unsupported types', () => {
+      expect(detectVendor(null)).toBeNull();
+      expect(detectVendor(undefined)).toBeNull();
+      expect(detectVendor({})).toBeNull();
+      expect(detectVendor('string')).toBeNull();
+      expect(detectVendor(123)).toBeNull();
     });
   });
 
-  describe('isSupportedVendor', () => {
-    it('should return true for supported vendors', () => {
-      expect(isSupportedVendor('zod')).toBe(true);
-      expect(isSupportedVendor('valibot')).toBe(true);
-      expect(isSupportedVendor('arktype')).toBe(true);
+  describe('type guards', () => {
+    it('isZodSchema', () => {
+      expect(isZodSchema(z.string())).toBe(true);
+      expect(isZodSchema(v.string())).toBe(false);
+      expect(isZodSchema(type('string'))).toBe(false);
     });
 
-    it('should return false for unsupported vendors', () => {
-      expect(isSupportedVendor('unknown')).toBe(false);
-      expect(isSupportedVendor('my-lib')).toBe(false);
-      // TypeBox and Effect don't implement Standard Schema
-      expect(isSupportedVendor('typebox')).toBe(false);
-      expect(isSupportedVendor('effect')).toBe(false);
-    });
-  });
-
-  describe('normalizeVendor', () => {
-    it('should normalize vendor names', () => {
-      expect(normalizeVendor('zod')).toBe('zod');
-      expect(normalizeVendor('valibot')).toBe('valibot');
-      expect(normalizeVendor('arktype')).toBe('arktype');
+    it('isValibotSchema', () => {
+      expect(isValibotSchema(v.string())).toBe(true);
+      expect(isValibotSchema(z.string())).toBe(false);
+      expect(isValibotSchema(type('string'))).toBe(false);
     });
 
-    it('should return null for unsupported vendors', () => {
-      expect(normalizeVendor('unknown')).toBeNull();
-      expect(normalizeVendor('typebox')).toBeNull();
-      expect(normalizeVendor('effect')).toBeNull();
-    });
-  });
-
-  describe('SUPPORTED_VENDORS', () => {
-    it('should contain all supported vendors', () => {
-      expect(SUPPORTED_VENDORS).toContain('zod');
-      expect(SUPPORTED_VENDORS).toContain('valibot');
-      expect(SUPPORTED_VENDORS).toContain('arktype');
-    });
-
-    it('should only contain Standard Schema compatible vendors', () => {
-      expect(SUPPORTED_VENDORS).not.toContain('typebox');
-      expect(SUPPORTED_VENDORS).not.toContain('effect');
+    it('isArkTypeSchema', () => {
+      expect(isArkTypeSchema(type('string'))).toBe(true);
+      expect(isArkTypeSchema(z.string())).toBe(false);
+      expect(isArkTypeSchema(v.string())).toBe(false);
     });
   });
 });
