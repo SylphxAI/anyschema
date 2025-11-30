@@ -29,7 +29,7 @@ export default defineConfig({
 		'src/adapter/adapters/runtypes.validator.ts',
 		'src/adapter/adapters/runtypes.transformer.ts',
 	],
-	format: ['esm', 'cjs'],
+	format: ['esm'],
 	dts: true,
 	clean: true,
 	sourcemap: false,

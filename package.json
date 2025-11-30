@@ -5,39 +5,20 @@
 	"description": "Universal schema utilities for TypeScript. Zero dependencies. Works with Zod, Valibot, ArkType, Yup, Joi, io-ts, and more.",
 	"type": "module",
 	"sideEffects": false,
-	"main": "./dist/src/index.cjs",
 	"module": "./dist/src/index.js",
 	"types": "./dist/src/index.d.ts",
 	"exports": {
 		".": {
-			"import": {
-				"types": "./dist/src/index.d.ts",
-				"default": "./dist/src/index.js"
-			},
-			"require": {
-				"types": "./dist/src/index.d.cts",
-				"default": "./dist/src/index.cjs"
-			}
+			"types": "./dist/src/index.d.ts",
+			"default": "./dist/src/index.js"
 		},
 		"./adapter": {
-			"import": {
-				"types": "./dist/src/adapter/index.d.ts",
-				"default": "./dist/src/adapter/index.js"
-			},
-			"require": {
-				"types": "./dist/src/adapter/index.d.cts",
-				"default": "./dist/src/adapter/index.cjs"
-			}
+			"types": "./dist/src/adapter/index.d.ts",
+			"default": "./dist/src/adapter/index.js"
 		},
 		"./adapter/*": {
-			"import": {
-				"types": "./dist/src/adapter/*.d.ts",
-				"default": "./dist/src/adapter/*.js"
-			},
-			"require": {
-				"types": "./dist/src/adapter/*.d.cts",
-				"default": "./dist/src/adapter/*.cjs"
-			}
+			"types": "./dist/src/adapter/*.d.ts",
+			"default": "./dist/src/adapter/*.js"
 		}
 	},
 	"files": [

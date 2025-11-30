@@ -63,7 +63,10 @@ export const joiTransformer = defineTransformerAdapter<JoiSchema>({
 	isLiteral: () => false, // Joi uses valid()
 	isEnum: (s) => {
 		const flags = getFlags(s)
-		return Array.isArray(flags?.['only']) || (flags?.['only'] === true && s._valids?._values instanceof Set)
+		return (
+			Array.isArray(flags?.['only']) ||
+			(flags?.['only'] === true && s._valids?._values instanceof Set)
+		)
 	},
 	isOptional: (s) => getFlags(s)?.['presence'] === 'optional',
 	isNullable: (s) => {
