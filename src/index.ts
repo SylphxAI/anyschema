@@ -1043,6 +1043,12 @@ function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSc
 function getMetadataByVendor(vendor: SchemaVendor, schema: unknown): SchemaMetadata {
 	switch (vendor) {
 		case 'zod': {
+			// Zod v4: use description getter
+			if (typeof schema === 'object' && schema !== null && '_zod' in schema) {
+				const desc = (schema as { description?: string }).description
+				return desc ? { description: desc } : {}
+			}
+			// Zod v3: use _def.description
 			const def = (schema as { _def?: { description?: string } })._def
 			return def?.description ? { description: def.description } : {}
 		}

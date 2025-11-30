@@ -1039,4 +1039,18 @@ describe('Zod v4 Native (zod/v4)', () => {
 			expect(isZodSchema(zv4.array(zv4.string()))).toBe(true)
 		})
 	})
+
+	describe('Metadata', () => {
+		it('should extract description from Zod v4 schema', () => {
+			const schema = zv4.string().describe('A v4 description')
+			const meta = getMetadata(schema)
+			expect(meta.description).toBe('A v4 description')
+		})
+
+		it('should return empty object for v4 schema without description', () => {
+			const schema = zv4.string()
+			const meta = getMetadata(schema)
+			expect(meta).toEqual({})
+		})
+	})
 })
