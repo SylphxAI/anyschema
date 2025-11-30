@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.2 (2025-11-30)
+
+### 🐛 Bug Fixes
+
+- ensure dist files are included in publish ([55463ec](https://github.com/SylphxAI/anyschema/commit/55463ec6661558e5a67d537043d5adc415e16de8))
+
+### 🔧 Chores
+
+- bump @sylphx/bump to 1.4.11 ([fc8225b](https://github.com/SylphxAI/anyschema/commit/fc8225b48189ec4031c20732f98adf6b61933d80))
+
 ## 0.1.1 (2025-11-30)
 
 ### 🐛 Bug Fixes
