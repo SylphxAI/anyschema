@@ -8,25 +8,34 @@
 import { withStructValidate } from '../helpers.js'
 import { defineAdapter } from '../types.js'
 
-const isSuperstruct = (s: unknown): boolean => {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Superstruct schema shape for type inference */
+export interface SuperstructSchema {
+	refiner: unknown
+	validator: unknown
+	coercer: unknown
+	type?: string
+	schema?: unknown
+	default?: unknown
+}
+
+// Type guard
+const isSuperstructSchema = (s: unknown): s is SuperstructSchema => {
 	if (!s || typeof s !== 'object') return false
 	return 'refiner' in s && 'validator' in s && 'coercer' in s
 }
 
-const getType = (s: unknown): string | null => {
-	if (!isSuperstruct(s)) return null
-	return (s as { type?: string }).type ?? null
-}
+// Helpers
+const getType = (s: SuperstructSchema): string | null => s.type ?? null
+const getSchema = (s: SuperstructSchema): unknown => s.schema ?? null
 
-const getSchema = (s: unknown): unknown => {
-	if (!isSuperstruct(s)) return null
-	return (s as { schema?: unknown }).schema ?? null
-}
-
-export const superstructAdapter = defineAdapter({
+export const superstructAdapter = defineAdapter<SuperstructSchema>({
 	vendor: 'superstruct',
 
-	match: isSuperstruct,
+	match: isSuperstructSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => getType(s) === 'string',
@@ -200,9 +209,7 @@ export const superstructAdapter = defineAdapter({
 	getTitle: () => undefined,
 	getDefault: (s) => {
 		if (getType(s) !== 'defaulted') return undefined
-		// Default value is stored separately
-		const defaulter = (s as { default?: unknown }).default
-		return typeof defaulter === 'function' ? undefined : defaulter
+		return typeof s.default === 'function' ? undefined : s.default
 	},
 	getExamples: () => undefined,
 	isDeprecated: () => false,

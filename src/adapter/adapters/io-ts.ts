@@ -8,25 +8,39 @@
 import { withDecode } from '../helpers.js'
 import { defineAdapter } from '../types.js'
 
-const isIoTs = (s: unknown): boolean => {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** io-ts codec shape for type inference */
+export interface IoTsSchema {
+	_tag: string
+	decode: (i: unknown) => unknown
+	encode: (a: unknown) => unknown
+	name?: string
+	props?: Record<string, unknown>
+	type?: unknown
+	types?: unknown[]
+	value?: unknown
+	domain?: unknown
+	codomain?: unknown
+	runDefinition?: () => unknown
+}
+
+// Type guard
+const isIoTsSchema = (s: unknown): s is IoTsSchema => {
 	if (!s || typeof s !== 'object') return false
 	return '_tag' in s && 'decode' in s && 'encode' in s
 }
 
-const getTag = (s: unknown): string | null => {
-	if (!isIoTs(s)) return null
-	return (s as { _tag?: string })._tag ?? null
-}
+// Helpers
+const getTag = (s: IoTsSchema): string => s._tag
+const getName = (s: IoTsSchema): string | null => s.name ?? null
 
-const getName = (s: unknown): string | null => {
-	if (!isIoTs(s)) return null
-	return (s as { name?: string }).name ?? null
-}
-
-export const ioTsAdapter = defineAdapter({
+export const ioTsAdapter = defineAdapter<IoTsSchema>({
 	vendor: 'io-ts',
 
-	match: isIoTs,
+	match: isIoTsSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => getTag(s) === 'StringType' || getName(s) === 'string',
@@ -69,23 +83,21 @@ export const ioTsAdapter = defineAdapter({
 
 	// ============ Unwrap ============
 	unwrap: (s) => {
-		if (!isIoTs(s)) return null
 		const tag = getTag(s)
 
 		// RefinementType, BrandType have type property
 		if (tag === 'RefinementType' || tag === 'BrandType') {
-			return (s as { type?: unknown }).type ?? null
+			return s.type ?? null
 		}
 
 		// RecursiveType has runDefinition
 		if (tag === 'RecursiveType') {
-			const runDef = (s as { runDefinition?: () => unknown }).runDefinition
-			return typeof runDef === 'function' ? runDef() : null
+			return typeof s.runDefinition === 'function' ? s.runDefinition() : null
 		}
 
 		// ExactType, StrictType have props wrapped
 		if (tag === 'ExactType' || tag === 'StrictType') {
-			return (s as { type?: unknown }).type ?? null
+			return s.type ?? null
 		}
 
 		return null
@@ -95,42 +107,40 @@ export const ioTsAdapter = defineAdapter({
 	getObjectEntries: (s) => {
 		const tag = getTag(s)
 		if (tag !== 'InterfaceType' && tag !== 'PartialType') return []
-
-		const props = (s as { props?: Record<string, unknown> }).props
-		return props ? Object.entries(props) : []
+		return s.props ? Object.entries(s.props) : []
 	},
 
 	getArrayElement: (s) => {
 		const tag = getTag(s)
 		if (tag !== 'ArrayType' && tag !== 'ReadonlyArrayType') return null
-		return (s as { type?: unknown }).type ?? null
+		return s.type ?? null
 	},
 
 	getUnionOptions: (s) => {
 		if (getTag(s) !== 'UnionType') return []
-		return (s as { types?: unknown[] }).types ?? []
+		return s.types ?? []
 	},
 
 	getLiteralValue: (s) => {
 		if (getTag(s) !== 'LiteralType') return undefined
-		return (s as { value?: unknown }).value
+		return s.value
 	},
 
 	getEnumValues: () => [],
 
 	getTupleItems: (s) => {
 		if (getTag(s) !== 'TupleType') return []
-		return (s as { types?: unknown[] }).types ?? []
+		return s.types ?? []
 	},
 
 	getRecordKeyType: (s) => {
 		if (getTag(s) !== 'DictionaryType') return null
-		return (s as { domain?: unknown }).domain ?? null
+		return s.domain ?? null
 	},
 
 	getRecordValueType: (s) => {
 		if (getTag(s) !== 'DictionaryType') return null
-		return (s as { codomain?: unknown }).codomain ?? null
+		return s.codomain ?? null
 	},
 
 	getMapKeyType: () => null,
@@ -139,7 +149,7 @@ export const ioTsAdapter = defineAdapter({
 
 	getIntersectionSchemas: (s) => {
 		if (getTag(s) !== 'IntersectionType') return []
-		return (s as { types?: unknown[] }).types ?? []
+		return s.types ?? []
 	},
 
 	getPromiseInner: () => null,

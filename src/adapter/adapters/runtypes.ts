@@ -8,25 +8,45 @@
 import { withCheck } from '../helpers.js'
 import { defineAdapter } from '../types.js'
 
-const isRuntypes = (s: unknown): boolean => {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Runtypes schema shape for type inference */
+export interface RuntypesSchema {
+	reflect: RuntypesReflect
+	check: (x: unknown) => unknown
+	guard: (x: unknown) => boolean
+}
+
+interface RuntypesReflect {
+	tag?: string
+	underlying?: unknown
+	entity?: unknown
+	fields?: Record<string, unknown>
+	element?: unknown
+	alternatives?: unknown[]
+	value?: unknown
+	components?: unknown[]
+	key?: unknown
+	intersectees?: unknown[]
+	ctor?: unknown
+}
+
+// Type guard
+const isRuntypesSchema = (s: unknown): s is RuntypesSchema => {
 	if (!s || typeof s !== 'object') return false
 	return 'reflect' in s && 'check' in s && 'guard' in s
 }
 
-const getReflect = (s: unknown): Record<string, unknown> | null => {
-	if (!isRuntypes(s)) return null
-	return (s as { reflect?: Record<string, unknown> }).reflect ?? null
-}
+// Helpers
+const getReflect = (s: RuntypesSchema): RuntypesReflect => s.reflect
+const getTag = (s: RuntypesSchema): string | null => s.reflect?.tag ?? null
 
-const getTag = (s: unknown): string | null => {
-	const reflect = getReflect(s)
-	return reflect?.['tag'] as string | null
-}
-
-export const runtypesAdapter = defineAdapter({
+export const runtypesAdapter = defineAdapter<RuntypesSchema>({
 	vendor: 'runtypes',
 
-	match: isRuntypes,
+	match: isRuntypesSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => getTag(s) === 'string',
@@ -66,29 +86,19 @@ export const runtypesAdapter = defineAdapter({
 	// ============ Unwrap ============
 	unwrap: (s) => {
 		const reflect = getReflect(s)
-		if (!reflect) return null
-
 		const tag = getTag(s)
 
 		// Optional has underlying
-		if (tag === 'optional') {
-			return reflect['underlying'] ?? null
-		}
+		if (tag === 'optional') return reflect.underlying ?? null
 
 		// Constraint has underlying
-		if (tag === 'constraint') {
-			return reflect['underlying'] ?? null
-		}
+		if (tag === 'constraint') return reflect.underlying ?? null
 
 		// Brand has entity
-		if (tag === 'brand') {
-			return reflect['entity'] ?? null
-		}
+		if (tag === 'brand') return reflect.entity ?? null
 
 		// Lazy has underlying (resolved)
-		if (tag === 'lazy') {
-			return reflect['underlying'] ?? null
-		}
+		if (tag === 'lazy') return reflect.underlying ?? null
 
 		return null
 	},
@@ -96,47 +106,39 @@ export const runtypesAdapter = defineAdapter({
 	// ============ Extract ============
 	getObjectEntries: (s) => {
 		if (getTag(s) !== 'record') return []
-		const reflect = getReflect(s)
-		const fields = reflect?.['fields'] as Record<string, unknown> | undefined
-		return fields ? Object.entries(fields) : []
+		return getReflect(s).fields ? Object.entries(getReflect(s).fields!) : []
 	},
 
 	getArrayElement: (s) => {
 		if (getTag(s) !== 'array') return null
-		const reflect = getReflect(s)
-		return reflect?.['element'] ?? null
+		return getReflect(s).element ?? null
 	},
 
 	getUnionOptions: (s) => {
 		if (getTag(s) !== 'union') return []
-		const reflect = getReflect(s)
-		return (reflect?.['alternatives'] as unknown[]) ?? []
+		return getReflect(s).alternatives ?? []
 	},
 
 	getLiteralValue: (s) => {
 		if (getTag(s) !== 'literal') return undefined
-		const reflect = getReflect(s)
-		return reflect?.['value']
+		return getReflect(s).value
 	},
 
 	getEnumValues: () => [],
 
 	getTupleItems: (s) => {
 		if (getTag(s) !== 'tuple') return []
-		const reflect = getReflect(s)
-		return (reflect?.['components'] as unknown[]) ?? []
+		return getReflect(s).components ?? []
 	},
 
 	getRecordKeyType: (s) => {
 		if (getTag(s) !== 'dictionary') return null
-		const reflect = getReflect(s)
-		return reflect?.['key'] ?? null
+		return getReflect(s).key ?? null
 	},
 
 	getRecordValueType: (s) => {
 		if (getTag(s) !== 'dictionary') return null
-		const reflect = getReflect(s)
-		return reflect?.['value'] ?? null
+		return getReflect(s).value ?? null
 	},
 
 	getMapKeyType: () => null,
@@ -145,16 +147,14 @@ export const runtypesAdapter = defineAdapter({
 
 	getIntersectionSchemas: (s) => {
 		if (getTag(s) !== 'intersect') return []
-		const reflect = getReflect(s)
-		return (reflect?.['intersectees'] as unknown[]) ?? []
+		return getReflect(s).intersectees ?? []
 	},
 
 	getPromiseInner: () => null,
 
 	getInstanceOfClass: (s) => {
 		if (getTag(s) !== 'instanceof') return null
-		const reflect = getReflect(s)
-		return reflect?.['ctor'] ?? null
+		return getReflect(s).ctor ?? null
 	},
 
 	// ============ Constraints ============

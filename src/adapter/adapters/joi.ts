@@ -8,30 +8,44 @@
 import { withJoiValidate } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
-const isJoi = (s: unknown): boolean => {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Joi schema shape for type inference */
+export interface JoiSchema {
+	$_root: unknown
+	type: string
+	validate: (data: unknown) => unknown
+	validateAsync?: (data: unknown) => Promise<unknown>
+	_flags?: Record<string, unknown>
+	_rules?: Array<{ name: string; args?: Record<string, unknown> }>
+	_valids?: { _values?: Set<unknown> }
+	$_terms?: {
+		keys?: Array<{ key: string; schema: unknown }>
+		items?: unknown[]
+		ordered?: unknown[]
+		matches?: Array<{ schema: unknown }>
+		examples?: unknown[]
+	}
+}
+
+// Type guard
+const isJoiSchema = (s: unknown): s is JoiSchema => {
 	if (!s || typeof s !== 'object') return false
 	return '$_root' in s && 'type' in s && 'validate' in s
 }
 
-const getType = (s: unknown): string | null => {
-	if (!isJoi(s)) return null
-	return (s as { type?: string }).type ?? null
-}
+// Helpers
+const getType = (s: JoiSchema): string => s.type
+const getFlags = (s: JoiSchema): Record<string, unknown> | null => s._flags ?? null
+const getRules = (s: JoiSchema): Array<{ name: string; args?: Record<string, unknown> }> =>
+	s._rules ?? []
 
-const getFlags = (s: unknown): Record<string, unknown> | null => {
-	if (!isJoi(s)) return null
-	return (s as { _flags?: Record<string, unknown> })._flags ?? null
-}
-
-const getRules = (s: unknown): Array<{ name: string; args?: Record<string, unknown> }> => {
-	if (!isJoi(s)) return []
-	return (s as { _rules?: Array<{ name: string; args?: Record<string, unknown> }> })._rules ?? []
-}
-
-export const joiAdapter = defineAdapter({
+export const joiAdapter = defineAdapter<JoiSchema>({
 	vendor: 'joi',
 
-	match: isJoi,
+	match: isJoiSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => getType(s) === 'string',
@@ -51,21 +65,15 @@ export const joiAdapter = defineAdapter({
 		const flags = getFlags(s)
 		return (
 			Array.isArray(flags?.['only']) ||
-			(flags?.['only'] === true &&
-				Array.isArray((s as { _valids?: { _values?: Set<unknown> } })._valids?._values))
+			(flags?.['only'] === true && s._valids?._values instanceof Set)
 		)
 	},
-	isOptional: (s) => {
-		const flags = getFlags(s)
-		return flags?.['presence'] === 'optional'
-	},
+	isOptional: (s) => getFlags(s)?.['presence'] === 'optional',
 	isNullable: (s) => {
-		const valids = (s as { _valids?: { _values?: Set<unknown> } })._valids?._values
+		const valids = s._valids?._values
 		return valids instanceof Set && valids.has(null)
 	},
-	isTuple: (s) =>
-		getType(s) === 'array' &&
-		Array.isArray((s as { $_terms?: { ordered?: unknown[] } }).$_terms?.ordered),
+	isTuple: (s) => getType(s) === 'array' && Array.isArray(s.$_terms?.ordered),
 	isRecord: () => false,
 	isMap: () => false,
 	isSet: () => false,
@@ -89,37 +97,30 @@ export const joiAdapter = defineAdapter({
 	// ============ Extract ============
 	getObjectEntries: (s) => {
 		if (getType(s) !== 'object') return []
-		const keys = (s as { $_terms?: { keys?: Array<{ key: string; schema: unknown }> } }).$_terms
-			?.keys
-		return keys?.map((k) => [k.key, k.schema]) ?? []
+		return s.$_terms?.keys?.map((k) => [k.key, k.schema] as [string, unknown]) ?? []
 	},
 
 	getArrayElement: (s) => {
 		if (getType(s) !== 'array') return null
-		const items = (s as { $_terms?: { items?: unknown[] } }).$_terms?.items
-		return items?.[0] ?? null
+		return s.$_terms?.items?.[0] ?? null
 	},
 
 	getUnionOptions: (s) => {
 		if (getType(s) !== 'alternatives') return []
-		const matches = (s as { $_terms?: { matches?: Array<{ schema: unknown }> } }).$_terms?.matches
-		return matches?.map((m) => m.schema) ?? []
+		return s.$_terms?.matches?.map((m) => m.schema) ?? []
 	},
 
 	getLiteralValue: () => undefined,
 
 	getEnumValues: (s) => {
-		const valids = (s as { _valids?: { _values?: Set<unknown> } })._valids?._values
+		const valids = s._valids?._values
 		if (valids instanceof Set) {
 			return [...valids].filter((v) => v !== null && v !== undefined)
 		}
 		return []
 	},
 
-	getTupleItems: (s) => {
-		const ordered = (s as { $_terms?: { ordered?: unknown[] } }).$_terms?.ordered
-		return ordered ?? []
-	},
+	getTupleItems: (s) => s.$_terms?.ordered ?? [],
 
 	getRecordKeyType: () => null,
 	getRecordValueType: () => null,
@@ -182,7 +183,7 @@ export const joiAdapter = defineAdapter({
 	getTitle: (s) => getFlags(s)?.['label'] as string | undefined,
 	getDefault: (s) => getFlags(s)?.['default'],
 	getExamples: (s) => {
-		const examples = (s as { $_terms?: { examples?: unknown[] } }).$_terms?.examples
+		const examples = s.$_terms?.examples
 		return examples?.length ? examples : undefined
 	},
 	isDeprecated: () => false,
@@ -192,7 +193,7 @@ export const joiAdapter = defineAdapter({
 		withJoiValidate(s, data) ?? { success: false, issues: [{ message: 'Invalid Joi schema' }] },
 
 	validateAsync: async (s, data) => {
-		if (typeof (s as { validateAsync?: unknown }).validateAsync !== 'function') {
+		if (typeof s.validateAsync !== 'function') {
 			// Fall back to sync
 			return (
 				withJoiValidate(s, data) ?? { success: false, issues: [{ message: 'Invalid Joi schema' }] }
@@ -200,9 +201,7 @@ export const joiAdapter = defineAdapter({
 		}
 
 		try {
-			const result = await (s as { validateAsync: (d: unknown) => Promise<unknown> }).validateAsync(
-				data
-			)
+			const result = await s.validateAsync(data)
 			return { success: true, data: result }
 		} catch (error) {
 			const joiError = error as { details?: Array<{ message: string; path: (string | number)[] }> }

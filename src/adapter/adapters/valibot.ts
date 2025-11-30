@@ -8,8 +8,12 @@
 import { withValibotRun, withValibotRunAsync } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
-// Type helpers
-interface ValibotSchema {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Valibot schema shape for type inference */
+export interface ValibotSchema {
 	kind: 'schema'
 	type: string
 	pipe?: ValibotPipeItem[]
@@ -34,7 +38,7 @@ interface ValibotPipeItem {
 	description?: string
 }
 
-// Helper to check if it's a Valibot schema
+// Type guard
 const isValibotSchema = (s: unknown): s is ValibotSchema => {
 	return (
 		s != null && typeof s === 'object' && 'kind' in s && (s as { kind: unknown }).kind === 'schema'
@@ -42,28 +46,22 @@ const isValibotSchema = (s: unknown): s is ValibotSchema => {
 }
 
 // Helper to get type
-const getType = (s: unknown): string | null => {
-	if (!isValibotSchema(s)) return null
-	return s.type
-}
+const getType = (s: ValibotSchema): string => s.type
 
 // Helper to get pipe items
-const getPipe = (s: unknown): ValibotPipeItem[] => {
-	if (!isValibotSchema(s)) return []
-	return s.pipe ?? []
-}
+const getPipe = (s: ValibotSchema): ValibotPipeItem[] => s.pipe ?? []
 
 // Helper to find pipe item by kind/type
-const findPipeItem = (s: unknown, kind: string, type?: string): ValibotPipeItem | undefined => {
+const findPipeItem = (s: ValibotSchema, kind: string, type?: string): ValibotPipeItem | undefined => {
 	return getPipe(s).find((p) => p.kind === kind && (!type || p.type === type))
 }
 
 // Helper to find all pipe items by kind
-const findPipeItems = (s: unknown, kind: string): ValibotPipeItem[] => {
+const findPipeItems = (s: ValibotSchema, kind: string): ValibotPipeItem[] => {
 	return getPipe(s).filter((p) => p.kind === kind)
 }
 
-export const valibotAdapter = defineAdapter({
+export const valibotAdapter = defineAdapter<ValibotSchema>({
 	vendor: 'valibot',
 
 	match: isValibotSchema,
@@ -91,19 +89,9 @@ export const valibotAdapter = defineAdapter({
 	isSet: (s) => getType(s) === 'set',
 	isIntersection: (s) => getType(s) === 'intersect',
 	isLazy: (s) => getType(s) === 'lazy',
-	isTransform: (s) => {
-		// Check if pipe has a transformation
-		return findPipeItem(s, 'transformation') !== undefined
-	},
-	isRefine: (s) => {
-		// Check if pipe has custom validation
-		return findPipeItem(s, 'validation', 'custom') !== undefined
-	},
-	isDefault: (s) => {
-		// Valibot uses optional/nullable with default value
-		if (!isValibotSchema(s)) return false
-		return (getType(s) === 'optional' || getType(s) === 'nullable') && s.default !== undefined
-	},
+	isTransform: (s) => findPipeItem(s, 'transformation') !== undefined,
+	isRefine: (s) => findPipeItem(s, 'validation', 'custom') !== undefined,
+	isDefault: (s) => (getType(s) === 'optional' || getType(s) === 'nullable') && s.default !== undefined,
 	isCatch: () => false, // Valibot doesn't have catch
 	isBranded: (s) => getType(s) === 'brand',
 	isDate: (s) => getType(s) === 'date',
@@ -115,8 +103,6 @@ export const valibotAdapter = defineAdapter({
 
 	// ============ Unwrap ============
 	unwrap: (s) => {
-		if (!isValibotSchema(s)) return null
-
 		// optional, nullable, nullish - have wrapped
 		if (s.wrapped) return s.wrapped
 
@@ -139,29 +125,24 @@ export const valibotAdapter = defineAdapter({
 
 	// ============ Extract ============
 	getObjectEntries: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'object') return []
+		if (getType(s) !== 'object') return []
 		return s.entries ? Object.entries(s.entries) : []
 	},
 
-	getArrayElement: (s) => {
-		if (!isValibotSchema(s)) return null
-		return s.item ?? null
-	},
+	getArrayElement: (s) => s.item ?? null,
 
 	getUnionOptions: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'union') return []
+		if (getType(s) !== 'union') return []
 		return s.options ?? []
 	},
 
 	getLiteralValue: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'literal') return undefined
+		if (getType(s) !== 'literal') return undefined
 		return s.literal
 	},
 
 	getEnumValues: (s) => {
-		if (!isValibotSchema(s)) return []
-		// enum has `options` array
-		// picklist has `options` array
+		// enum has `options` array, picklist has `options` array
 		if (s.options && Array.isArray(s.options)) return s.options
 		// enum also has `enum` object
 		if (s.enum && typeof s.enum === 'object') return Object.values(s.enum)
@@ -169,54 +150,52 @@ export const valibotAdapter = defineAdapter({
 	},
 
 	getTupleItems: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'tuple') return []
+		if (getType(s) !== 'tuple') return []
 		return s.items ?? []
 	},
 
 	getRecordKeyType: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'record') return null
+		if (getType(s) !== 'record') return null
 		return s.key ?? null
 	},
 
 	getRecordValueType: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'record') return null
+		if (getType(s) !== 'record') return null
 		return s.value ?? null
 	},
 
 	getMapKeyType: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'map') return null
+		if (getType(s) !== 'map') return null
 		return s.key ?? null
 	},
 
 	getMapValueType: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'map') return null
+		if (getType(s) !== 'map') return null
 		return s.value ?? null
 	},
 
 	getSetElement: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'set') return null
+		if (getType(s) !== 'set') return null
 		return s.value ?? null
 	},
 
 	getIntersectionSchemas: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'intersect') return []
+		if (getType(s) !== 'intersect') return []
 		return s.options ?? []
 	},
 
 	getPromiseInner: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'promise') return null
+		if (getType(s) !== 'promise') return null
 		return s.wrapped ?? null
 	},
 
 	getInstanceOfClass: (s) => {
-		if (!isValibotSchema(s) || getType(s) !== 'instance') return null
+		if (getType(s) !== 'instance') return null
 		return (s as { class?: unknown }).class ?? null
 	},
 
 	// ============ Constraints ============
 	getConstraints: (s) => {
-		if (!isValibotSchema(s)) return null
-
 		const result: SchemaConstraints = {}
 
 		// Check pipe for validations
@@ -282,7 +261,6 @@ export const valibotAdapter = defineAdapter({
 	},
 
 	getDefault: (s) => {
-		if (!isValibotSchema(s)) return undefined
 		// optional/nullable with default
 		if ((getType(s) === 'optional' || getType(s) === 'nullable') && s.default !== undefined) {
 			// default can be a value or a function

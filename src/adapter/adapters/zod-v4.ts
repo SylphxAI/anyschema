@@ -8,6 +8,15 @@
 import { withSafeParse, withSafeParseAsync } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Zod v4 schema shape for type inference */
+export interface ZodV4Schema {
+	_zod: { def: ZodV4Def }
+}
+
 // Zod v4 internal def type
 interface ZodV4Def {
 	type?: string
@@ -37,25 +46,21 @@ interface ZodV4CheckDef {
 	format?: string
 }
 
-// Helper to get def
-const getDef = (s: unknown): ZodV4Def | null => {
-	if (s && typeof s === 'object' && '_zod' in s) {
-		const zod = (s as { _zod: { def: ZodV4Def } })._zod
-		return zod?.def ?? null
-	}
-	return null
+// Type guard
+const isZodV4 = (s: unknown): s is ZodV4Schema => {
+	return s != null && typeof s === 'object' && '_zod' in s
 }
+
+// Helper to get def
+const getDef = (s: ZodV4Schema): ZodV4Def => s._zod.def
 
 // Helper to get type
-const getType = (s: unknown): string | null => {
-	const def = getDef(s)
-	return def?.type ?? null
-}
+const getType = (s: ZodV4Schema): string | null => getDef(s)?.type ?? null
 
-export const zodV4Adapter = defineAdapter({
+export const zodV4Adapter = defineAdapter<ZodV4Schema>({
 	vendor: 'zod',
 
-	match: (s) => s != null && typeof s === 'object' && '_zod' in s,
+	match: isZodV4,
 
 	// ============ Type Detection ============
 	isString: (s) => getType(s) === 'string',

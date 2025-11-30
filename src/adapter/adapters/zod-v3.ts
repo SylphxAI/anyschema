@@ -8,6 +8,15 @@
 import { withSafeParse, withSafeParseAsync } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Zod v3 schema shape for type inference */
+export interface ZodV3Schema {
+	_def: ZodV3Def
+}
+
 // Zod v3 internal def type
 interface ZodV3Def {
 	typeName?: string
@@ -40,30 +49,22 @@ interface ZodV3Check {
 	regex?: RegExp
 }
 
-// Helper to get _def
-const getDef = (s: unknown): ZodV3Def | null => {
-	if (s && typeof s === 'object' && '_def' in s) {
-		return (s as { _def: ZodV3Def })._def
-	}
-	return null
-}
-
-// Helper to get typeName
-const getTypeName = (s: unknown): string | null => {
-	const def = getDef(s)
-	return def?.typeName ?? null
-}
-
-// Check if this is Zod v3 (has _def.typeName but not _zod)
-const isZodV3 = (s: unknown): boolean => {
+// Type guard - Zod v3 has _def.typeName but NOT _zod
+const isZodV3 = (s: unknown): s is ZodV3Schema => {
 	if (!s || typeof s !== 'object') return false
-	// Zod v4 has _zod property, v3 doesn't
-	if ('_zod' in s) return false
-	const def = getDef(s)
+	if ('_zod' in s) return false // Zod v4
+	if (!('_def' in s)) return false
+	const def = (s as { _def: ZodV3Def })._def
 	return typeof def?.typeName === 'string'
 }
 
-export const zodV3Adapter = defineAdapter({
+// Helper to get _def
+const getDef = (s: ZodV3Schema): ZodV3Def => s._def
+
+// Helper to get typeName
+const getTypeName = (s: ZodV3Schema): string | null => getDef(s)?.typeName ?? null
+
+export const zodV3Adapter = defineAdapter<ZodV3Schema>({
 	vendor: 'zod',
 
 	match: isZodV3,

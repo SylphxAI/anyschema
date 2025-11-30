@@ -8,26 +8,46 @@
 
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
-const isEffect = (s: unknown): boolean => {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Effect schema shape for type inference */
+export interface EffectSchema {
+	Type: unknown
+	Encoded: unknown
+	ast: EffectAst
+}
+
+interface EffectAst {
+	_tag?: string
+	from?: EffectAst
+	types?: EffectAst[]
+	literal?: unknown
+	enums?: Array<[string, unknown]>
+	elements?: Array<{ type?: EffectAst }>
+	rest?: Array<{ type?: EffectAst }>
+	propertySignatures?: Array<{ name: string | symbol; type: EffectAst; isOptional?: boolean }>
+	indexSignatures?: Array<{ type?: EffectAst }>
+	transformation?: { _tag?: string }
+	f?: () => EffectAst
+	annotations?: Record<symbol, unknown>
+}
+
+// Type guard
+const isEffectSchema = (s: unknown): s is EffectSchema => {
 	if (!s || typeof s !== 'object') return false
 	return 'Type' in s && 'Encoded' in s && 'ast' in s
 }
 
-const getAst = (s: unknown): unknown => {
-	if (!isEffect(s)) return null
-	return (s as { ast?: unknown }).ast
-}
+// Helpers
+const getAst = (s: EffectSchema): EffectAst => s.ast
+const getAstType = (s: EffectSchema): string | null => s.ast?._tag ?? null
 
-const getAstType = (s: unknown): string | null => {
-	const ast = getAst(s)
-	if (!ast || typeof ast !== 'object') return null
-	return (ast as { _tag?: string })._tag ?? null
-}
-
-export const effectAdapter = defineAdapter({
+export const effectAdapter = defineAdapter<EffectSchema>({
 	vendor: 'effect',
 
-	match: isEffect,
+	match: isEffectSchema,
 
 	// ============ Type Detection ============
 	// Effect uses AST nodes with _tag property
@@ -35,25 +55,20 @@ export const effectAdapter = defineAdapter({
 		const astType = getAstType(s)
 		return (
 			astType === 'StringKeyword' ||
-			(astType === 'Refinement' &&
-				getAstType({ ast: (getAst(s) as { from?: unknown })?.from }) === 'StringKeyword')
+			(astType === 'Refinement' && getAst(s)?.from?._tag === 'StringKeyword')
 		)
 	},
 	isNumber: (s) => {
 		const astType = getAstType(s)
 		return (
 			astType === 'NumberKeyword' ||
-			(astType === 'Refinement' &&
-				getAstType({ ast: (getAst(s) as { from?: unknown })?.from }) === 'NumberKeyword')
+			(astType === 'Refinement' && getAst(s)?.from?._tag === 'NumberKeyword')
 		)
 	},
 	isBoolean: (s) => getAstType(s) === 'BooleanKeyword',
 	isNull: (s) => {
 		const ast = getAst(s)
-		return (
-			(ast as { _tag?: string; literal?: unknown })?._tag === 'Literal' &&
-			(ast as { literal?: unknown })?.literal === null
-		)
+		return ast?._tag === 'Literal' && ast?.literal === null
 	},
 	isUndefined: (s) => getAstType(s) === 'UndefinedKeyword',
 	isVoid: (s) => getAstType(s) === 'VoidKeyword',
@@ -61,26 +76,20 @@ export const effectAdapter = defineAdapter({
 	isUnknown: (s) => getAstType(s) === 'UnknownKeyword',
 	isNever: (s) => getAstType(s) === 'NeverKeyword',
 	isObject: (s) => getAstType(s) === 'TypeLiteral',
-	isArray: (s) =>
-		getAstType(s) === 'TupleType' && (getAst(s) as { rest?: unknown[] })?.rest?.length === 1,
+	isArray: (s) => getAstType(s) === 'TupleType' && getAst(s)?.rest?.length === 1,
 	isUnion: (s) => getAstType(s) === 'Union',
 	isLiteral: (s) => getAstType(s) === 'Literal',
 	isEnum: (s) => getAstType(s) === 'Enums',
-	isOptional: (s) => {
-		const ast = getAst(s)
-		return (ast as { isOptional?: boolean })?.isOptional === true
-	},
+	isOptional: () => false, // Effect handles optionality at property level
 	isNullable: () => false, // Effect uses union with null
 	isTuple: (s) => {
-		const astType = getAstType(s)
-		if (astType !== 'TupleType') return false
-		const rest = (getAst(s) as { rest?: unknown[] })?.rest
+		if (getAstType(s) !== 'TupleType') return false
+		const rest = getAst(s)?.rest
 		return !rest || rest.length === 0
 	},
 	isRecord: (s) => {
-		const astType = getAstType(s)
-		if (astType !== 'TypeLiteral') return false
-		const indexSignatures = (getAst(s) as { indexSignatures?: unknown[] })?.indexSignatures
+		if (getAstType(s) !== 'TypeLiteral') return false
+		const indexSignatures = getAst(s)?.indexSignatures
 		return Array.isArray(indexSignatures) && indexSignatures.length > 0
 	},
 	isMap: () => false,
@@ -91,21 +100,17 @@ export const effectAdapter = defineAdapter({
 	isRefine: (s) => getAstType(s) === 'Refinement',
 	isDefault: (s) => {
 		const ast = getAst(s)
-		return (
-			(ast as { _tag?: string })._tag === 'Transformation' &&
-			(ast as { transformation?: { _tag?: string } })?.transformation?._tag === 'DefaultDeclaration'
-		)
+		return ast?._tag === 'Transformation' && ast?.transformation?._tag === 'DefaultDeclaration'
 	},
 	isCatch: () => false,
 	isBranded: (s) => {
-		const annotations = (getAst(s) as { annotations?: Record<symbol, unknown> })?.annotations
+		const annotations = getAst(s)?.annotations
 		if (!annotations) return false
-		// Check for brand annotation
 		const brandSymbol = Symbol.for('@effect/schema/annotation/Brand')
 		return brandSymbol in annotations
 	},
 	isDate: (s) => {
-		const annotations = (getAst(s) as { annotations?: Record<symbol, unknown> })?.annotations
+		const annotations = getAst(s)?.annotations
 		if (!annotations) return false
 		const idSymbol = Symbol.for('@effect/schema/annotation/Identifier')
 		return annotations[idSymbol] === 'Date' || annotations[idSymbol] === 'DateFromSelf'
@@ -122,23 +127,18 @@ export const effectAdapter = defineAdapter({
 		const astType = getAstType(s)
 
 		// Refinement has from
-		if (astType === 'Refinement') {
-			const from = (ast as { from?: unknown })?.from
-			if (from) return { Type: null, Encoded: null, ast: from }
+		if (astType === 'Refinement' && ast?.from) {
+			return { Type: null, Encoded: null, ast: ast.from } as EffectSchema
 		}
 
 		// Transformation has from
-		if (astType === 'Transformation') {
-			const from = (ast as { from?: unknown })?.from
-			if (from) return { Type: null, Encoded: null, ast: from }
+		if (astType === 'Transformation' && ast?.from) {
+			return { Type: null, Encoded: null, ast: ast.from } as EffectSchema
 		}
 
 		// Suspend has f (lazy getter)
-		if (astType === 'Suspend') {
-			const f = (ast as { f?: () => unknown })?.f
-			if (typeof f === 'function') {
-				return { Type: null, Encoded: null, ast: f() }
-			}
+		if (astType === 'Suspend' && typeof ast?.f === 'function') {
+			return { Type: null, Encoded: null, ast: ast.f() } as EffectSchema
 		}
 
 		return null
@@ -147,14 +147,13 @@ export const effectAdapter = defineAdapter({
 	// ============ Extract ============
 	getObjectEntries: (s) => {
 		if (getAstType(s) !== 'TypeLiteral') return []
-		const ast = getAst(s) as { propertySignatures?: Array<{ name: string; type: unknown }> }
-		const props = ast?.propertySignatures ?? []
-		return props.map((p) => [String(p.name), { Type: null, Encoded: null, ast: p.type }])
+		const props = getAst(s)?.propertySignatures ?? []
+		return props.map((p) => [String(p.name), { Type: null, Encoded: null, ast: p.type }] as [string, unknown])
 	},
 
 	getArrayElement: (s) => {
 		if (getAstType(s) !== 'TupleType') return null
-		const rest = (getAst(s) as { rest?: Array<{ type?: unknown }> })?.rest
+		const rest = getAst(s)?.rest
 		if (rest && rest.length === 1 && rest[0]?.type) {
 			return { Type: null, Encoded: null, ast: rest[0].type }
 		}
@@ -163,24 +162,24 @@ export const effectAdapter = defineAdapter({
 
 	getUnionOptions: (s) => {
 		if (getAstType(s) !== 'Union') return []
-		const types = (getAst(s) as { types?: unknown[] })?.types ?? []
+		const types = getAst(s)?.types ?? []
 		return types.map((t) => ({ Type: null, Encoded: null, ast: t }))
 	},
 
 	getLiteralValue: (s) => {
 		if (getAstType(s) !== 'Literal') return undefined
-		return (getAst(s) as { literal?: unknown })?.literal
+		return getAst(s)?.literal
 	},
 
 	getEnumValues: (s) => {
 		if (getAstType(s) !== 'Enums') return []
-		const enums = (getAst(s) as { enums?: Array<[string, unknown]> })?.enums ?? []
+		const enums = getAst(s)?.enums ?? []
 		return enums.map((e) => e[1])
 	},
 
 	getTupleItems: (s) => {
 		if (getAstType(s) !== 'TupleType') return []
-		const elements = (getAst(s) as { elements?: Array<{ type?: unknown }> })?.elements ?? []
+		const elements = getAst(s)?.elements ?? []
 		return elements.map((e) => ({ Type: null, Encoded: null, ast: e.type }))
 	},
 
@@ -188,8 +187,7 @@ export const effectAdapter = defineAdapter({
 
 	getRecordValueType: (s) => {
 		if (getAstType(s) !== 'TypeLiteral') return null
-		const indexSignatures = (getAst(s) as { indexSignatures?: Array<{ type?: unknown }> })
-			?.indexSignatures
+		const indexSignatures = getAst(s)?.indexSignatures
 		if (indexSignatures && indexSignatures.length > 0 && indexSignatures[0]?.type) {
 			return { Type: null, Encoded: null, ast: indexSignatures[0].type }
 		}
@@ -205,10 +203,8 @@ export const effectAdapter = defineAdapter({
 
 	// ============ Constraints ============
 	getConstraints: (s) => {
-		// Effect stores constraints in annotations or refinement predicates
-		// Complex to extract, would need to walk the AST
-		const ast = getAst(s)
-		const annotations = (ast as { annotations?: Record<symbol, unknown> })?.annotations
+		// Effect stores constraints in annotations
+		const annotations = getAst(s)?.annotations
 		if (!annotations) return null
 
 		const result: SchemaConstraints = {}
@@ -238,14 +234,14 @@ export const effectAdapter = defineAdapter({
 
 	// ============ Metadata ============
 	getDescription: (s) => {
-		const annotations = (getAst(s) as { annotations?: Record<symbol, unknown> })?.annotations
+		const annotations = getAst(s)?.annotations
 		if (!annotations) return undefined
 		const descSymbol = Symbol.for('@effect/schema/annotation/Description')
 		return annotations[descSymbol] as string | undefined
 	},
 
 	getTitle: (s) => {
-		const annotations = (getAst(s) as { annotations?: Record<symbol, unknown> })?.annotations
+		const annotations = getAst(s)?.annotations
 		if (!annotations) return undefined
 		const titleSymbol = Symbol.for('@effect/schema/annotation/Title')
 		return annotations[titleSymbol] as string | undefined
@@ -254,7 +250,7 @@ export const effectAdapter = defineAdapter({
 	getDefault: () => undefined, // Complex in Effect
 
 	getExamples: (s) => {
-		const annotations = (getAst(s) as { annotations?: Record<symbol, unknown> })?.annotations
+		const annotations = getAst(s)?.annotations
 		if (!annotations) return undefined
 		const examplesSymbol = Symbol.for('@effect/schema/annotation/Examples')
 		const examples = annotations[examplesSymbol]

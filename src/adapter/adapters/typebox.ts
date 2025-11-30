@@ -8,9 +8,45 @@
 
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
 const TypeBoxKind = Symbol.for('TypeBox.Kind')
 
-const isTypeBox = (s: unknown): boolean => {
+/** TypeBox schema shape for type inference */
+export interface TypeBoxSchema {
+	[TypeBoxKind]?: string
+	kind?: string
+	type?: string
+	static?: unknown
+	params?: unknown
+	const?: unknown
+	enum?: unknown[]
+	anyOf?: unknown[]
+	allOf?: unknown[]
+	items?: unknown | unknown[]
+	properties?: Record<string, unknown>
+	additionalProperties?: unknown
+	required?: string[]
+	default?: unknown
+	minLength?: number
+	maxLength?: number
+	pattern?: string
+	format?: string
+	minimum?: number
+	maximum?: number
+	minItems?: number
+	maxItems?: number
+	description?: string
+	title?: string
+	examples?: unknown[]
+	deprecated?: boolean
+	$schema?: unknown
+}
+
+// Type guard
+const isTypeBoxSchema = (s: unknown): s is TypeBoxSchema => {
 	if (!s || typeof s !== 'object') return false
 	// TypeBox schemas have the TypeBox.Kind symbol
 	if (TypeBoxKind in s) return true
@@ -18,22 +54,16 @@ const isTypeBox = (s: unknown): boolean => {
 	return 'static' in s && 'params' in s
 }
 
-const getKind = (s: unknown): string | null => {
-	if (!isTypeBox(s)) return null
-	return (
-		(s as Record<symbol | string, string>)[TypeBoxKind] ?? (s as { kind?: string }).kind ?? null
-	)
-}
+// Helpers
+const getKind = (s: TypeBoxSchema): string | null =>
+	(s as Record<symbol | string, string>)[TypeBoxKind] ?? s.kind ?? null
 
-const getType = (s: unknown): string | null => {
-	if (!isTypeBox(s)) return null
-	return (s as { type?: string }).type ?? null
-}
+const getType = (s: TypeBoxSchema): string | null => s.type ?? null
 
-export const typeboxAdapter = defineAdapter({
+export const typeboxAdapter = defineAdapter<TypeBoxSchema>({
 	vendor: 'typebox',
 
-	match: isTypeBox,
+	match: isTypeBoxSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => getType(s) === 'string',
@@ -47,32 +77,29 @@ export const typeboxAdapter = defineAdapter({
 	isNever: (s) => getKind(s) === 'Never',
 	isObject: (s) => getType(s) === 'object',
 	isArray: (s) => getType(s) === 'array',
-	isUnion: (s) => (s as { anyOf?: unknown }).anyOf !== undefined,
-	isLiteral: (s) => (s as { const?: unknown }).const !== undefined,
-	isEnum: (s) => (s as { enum?: unknown }).enum !== undefined,
+	isUnion: (s) => s.anyOf !== undefined,
+	isLiteral: (s) => s.const !== undefined,
+	isEnum: (s) => s.enum !== undefined,
 	isOptional: (s) => getKind(s) === 'Optional',
 	isNullable: (s) => {
-		const anyOf = (s as { anyOf?: unknown[] }).anyOf
-		if (!Array.isArray(anyOf)) return false
-		return anyOf.some(
+		if (!Array.isArray(s.anyOf)) return false
+		return s.anyOf.some(
 			(o) => typeof o === 'object' && o !== null && (o as { type?: string }).type === 'null'
 		)
 	},
-	isTuple: (s) => getType(s) === 'array' && Array.isArray((s as { items?: unknown }).items),
+	isTuple: (s) => getType(s) === 'array' && Array.isArray(s.items),
 	isRecord: (s) =>
-		getType(s) === 'object' &&
-		(s as { additionalProperties?: unknown }).additionalProperties !== undefined &&
-		!(s as { properties?: unknown }).properties,
+		getType(s) === 'object' && s.additionalProperties !== undefined && !s.properties,
 	isMap: () => false, // TypeBox uses Record for maps
 	isSet: () => false,
-	isIntersection: (s) => (s as { allOf?: unknown }).allOf !== undefined,
+	isIntersection: (s) => s.allOf !== undefined,
 	isLazy: (s) => getKind(s) === 'Ref',
 	isTransform: (s) => getKind(s) === 'Transform',
 	isRefine: () => false,
-	isDefault: (s) => (s as { default?: unknown }).default !== undefined,
+	isDefault: (s) => s.default !== undefined,
 	isCatch: () => false,
 	isBranded: () => false,
-	isDate: (s) => getType(s) === 'string' && (s as { format?: string }).format === 'date-time',
+	isDate: (s) => getType(s) === 'string' && s.format === 'date-time',
 	isBigInt: (s) => getKind(s) === 'BigInt',
 	isSymbol: (s) => getKind(s) === 'Symbol',
 	isFunction: (s) => getKind(s) === 'Function',
@@ -86,13 +113,12 @@ export const typeboxAdapter = defineAdapter({
 		// Optional wraps inner schema
 		if (kind === 'Optional') {
 			// TypeBox Optional has the inner schema properties directly
-			// Need to clone without the Optional kind
 			return null // TypeBox doesn't have a clean unwrap
 		}
 
 		// Transform has inner schema
 		if (kind === 'Transform') {
-			return (s as { $schema?: unknown }).$schema ?? null
+			return s.$schema ?? null
 		}
 
 		return null
@@ -101,51 +127,39 @@ export const typeboxAdapter = defineAdapter({
 	// ============ Extract ============
 	getObjectEntries: (s) => {
 		if (getType(s) !== 'object') return []
-		const properties = (s as { properties?: Record<string, unknown> }).properties
-		return properties ? Object.entries(properties) : []
+		return s.properties ? Object.entries(s.properties) : []
 	},
 
 	getArrayElement: (s) => {
 		if (getType(s) !== 'array') return null
-		const items = (s as { items?: unknown }).items
 		// If items is array, it's a tuple
-		if (Array.isArray(items)) return null
-		return items ?? null
+		if (Array.isArray(s.items)) return null
+		return s.items ?? null
 	},
 
-	getUnionOptions: (s) => {
-		const anyOf = (s as { anyOf?: unknown[] }).anyOf
-		return Array.isArray(anyOf) ? anyOf : []
-	},
+	getUnionOptions: (s) => (Array.isArray(s.anyOf) ? s.anyOf : []),
 
-	getLiteralValue: (s) => (s as { const?: unknown }).const,
+	getLiteralValue: (s) => s.const,
 
-	getEnumValues: (s) => {
-		const enumValues = (s as { enum?: unknown[] }).enum
-		return Array.isArray(enumValues) ? enumValues : []
-	},
+	getEnumValues: (s) => (Array.isArray(s.enum) ? s.enum : []),
 
 	getTupleItems: (s) => {
 		if (getType(s) !== 'array') return []
-		const items = (s as { items?: unknown[] }).items
-		return Array.isArray(items) ? items : []
+		return Array.isArray(s.items) ? s.items : []
 	},
 
 	getRecordKeyType: () => null, // TypeBox records use JSON Schema additionalProperties
 
 	getRecordValueType: (s) => {
 		if (getType(s) !== 'object') return null
-		return (s as { additionalProperties?: unknown }).additionalProperties ?? null
+		return s.additionalProperties ?? null
 	},
 
 	getMapKeyType: () => null,
 	getMapValueType: () => null,
 	getSetElement: () => null,
 
-	getIntersectionSchemas: (s) => {
-		const allOf = (s as { allOf?: unknown[] }).allOf
-		return Array.isArray(allOf) ? allOf : []
-	},
+	getIntersectionSchemas: (s) => (Array.isArray(s.allOf) ? s.allOf : []),
 
 	getPromiseInner: () => null,
 	getInstanceOfClass: () => null,
@@ -153,35 +167,25 @@ export const typeboxAdapter = defineAdapter({
 	// ============ Constraints ============
 	getConstraints: (s) => {
 		const result: SchemaConstraints = {}
-		const schema = s as {
-			minLength?: number
-			maxLength?: number
-			pattern?: string
-			format?: string
-			minimum?: number
-			maximum?: number
-			minItems?: number
-			maxItems?: number
-		}
 
-		if (schema.minLength !== undefined) result.minLength = schema.minLength
-		if (schema.maxLength !== undefined) result.maxLength = schema.maxLength
-		if (schema.pattern !== undefined) result.pattern = schema.pattern
-		if (schema.format !== undefined) result.format = schema.format
-		if (schema.minimum !== undefined) result.min = schema.minimum
-		if (schema.maximum !== undefined) result.max = schema.maximum
-		if (schema.minItems !== undefined) result.min = schema.minItems
-		if (schema.maxItems !== undefined) result.max = schema.maxItems
+		if (s.minLength !== undefined) result.minLength = s.minLength
+		if (s.maxLength !== undefined) result.maxLength = s.maxLength
+		if (s.pattern !== undefined) result.pattern = s.pattern
+		if (s.format !== undefined) result.format = s.format
+		if (s.minimum !== undefined) result.min = s.minimum
+		if (s.maximum !== undefined) result.max = s.maximum
+		if (s.minItems !== undefined) result.min = s.minItems
+		if (s.maxItems !== undefined) result.max = s.maxItems
 
 		return Object.keys(result).length > 0 ? result : null
 	},
 
 	// ============ Metadata ============
-	getDescription: (s) => (s as { description?: string }).description,
-	getTitle: (s) => (s as { title?: string }).title,
-	getDefault: (s) => (s as { default?: unknown }).default,
-	getExamples: (s) => (s as { examples?: unknown[] }).examples,
-	isDeprecated: (s) => (s as { deprecated?: boolean }).deprecated === true,
+	getDescription: (s) => s.description,
+	getTitle: (s) => s.title,
+	getDefault: (s) => s.default,
+	getExamples: (s) => s.examples,
+	isDeprecated: (s) => s.deprecated === true,
 
 	// ============ Validation ============
 	// TypeBox schemas don't have validation methods - need @sinclair/typebox/value

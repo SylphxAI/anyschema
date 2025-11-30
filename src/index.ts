@@ -3,6 +3,39 @@
  *
  * Zero dependencies. Pure duck typing. Works with any version of any schema library.
  *
+ * ## Plugin-Based Usage (Recommended)
+ *
+ * Create type-safe validators/transformers with only the adapters you need:
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   createValidator,
+ *   createTransformer,
+ *   zodV4Adapter,
+ *   valibotAdapter
+ * } from 'anyschema';
+ *
+ * // Create validator with specific adapters
+ * const { validate, parse, is, assert } = createValidator({
+ *   adapters: [zodV4Adapter, valibotAdapter]
+ * });
+ *
+ * // Create transformer with specific adapters
+ * const { toJsonSchema } = createTransformer({
+ *   adapters: [zodV4Adapter, valibotAdapter]
+ * });
+ *
+ * // Works with Zod and Valibot schemas
+ * validate(zodSchema, data);      // OK
+ * toJsonSchema(valibotSchema);    // OK
+ *
+ * // TypeScript error - Yup not in adapters!
+ * validate(yupSchema, data);      // Error: Type 'YupSchema' is not assignable
+ * ```
+ *
+ * ## Global Usage (All Adapters)
+ *
  * @example
  * ```typescript
  * import { toJsonSchema, validate, is, parse, type InferOutput } from 'anyschema';
@@ -39,6 +72,45 @@ export {
 	getAdapters,
 	registerAdapter,
 	toJsonSchema as adapterToJsonSchema,
+	// Factory functions
+	createValidator,
+	createTransformer,
+	// All adapters
+	arktypeAdapter,
+	effectAdapter,
+	ioTsAdapter,
+	joiAdapter,
+	runtypesAdapter,
+	superstructAdapter,
+	typeboxAdapter,
+	valibotAdapter,
+	yupAdapter,
+	zodV3Adapter,
+	zodV4Adapter,
+} from './adapter/index.js'
+// Re-export adapter types
+export type {
+	SchemaAdapter,
+	PartialSchemaAdapter,
+	SchemaConstraints,
+	InferSchema,
+	InferSchemas,
+	Validator,
+	ValidatorOptions,
+	Transformer,
+	TransformerOptions,
+	// Schema types
+	ArkTypeSchema,
+	EffectSchema,
+	IoTsSchema,
+	JoiSchema,
+	RuntypesSchema,
+	SuperstructSchema,
+	TypeBoxSchema,
+	ValibotSchema,
+	YupSchema,
+	ZodV3Schema,
+	ZodV4Schema,
 } from './adapter/index.js'
 // Re-export detection utilities
 export {

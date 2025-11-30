@@ -8,6 +8,10 @@
 import { withCallable } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
 // Type helpers for ArkType's internal JSON representation
 type ArkJson =
 	| string // reference like "string", "number"
@@ -30,7 +34,8 @@ interface ArkJsonObject {
 	meta?: { format?: string; description?: string }
 }
 
-interface ArkTypeSchema {
+/** ArkType schema shape for type inference */
+export interface ArkTypeSchema {
 	internal: {
 		kind: string
 		json: ArkJson
@@ -41,9 +46,8 @@ interface ArkTypeSchema {
 	description?: string
 }
 
-// Helper to check if it's an ArkType schema
-// ArkType schemas are functions with internal and json properties
-const isArkType = (s: unknown): s is ArkTypeSchema => {
+// Type guard - ArkType schemas are functions with internal and json properties
+const isArkTypeSchema = (s: unknown): s is ArkTypeSchema => {
 	if (!s) return false
 	// ArkType schemas are functions
 	if (typeof s !== 'function' && typeof s !== 'object') return false
@@ -57,50 +61,32 @@ const isArkType = (s: unknown): s is ArkTypeSchema => {
 	)
 }
 
-// Helper to get JSON representation
-const getJson = (s: unknown): ArkJson | null => {
-	if (!isArkType(s)) return null
-	return s.json
-}
+// Helpers
+const getJson = (s: ArkTypeSchema): ArkJson => s.json
 
-// Helper to normalize JSON to object form
 const normalizeJson = (json: ArkJson): ArkJsonObject | null => {
-	if (typeof json === 'string') {
-		// Simple domain reference
-		return { domain: json }
-	}
-	if (Array.isArray(json)) {
-		// Union - return null, handle separately
-		return null
-	}
+	if (typeof json === 'string') return { domain: json }
+	if (Array.isArray(json)) return null // Union
 	return json
 }
 
-// Helper to check domain
-const hasDomain = (s: unknown, domain: string): boolean => {
-	const json = getJson(s)
-	if (!json) return false
-	const obj = normalizeJson(json)
+const hasDomain = (s: ArkTypeSchema, domain: string): boolean => {
+	const obj = normalizeJson(getJson(s))
 	return obj?.domain === domain
 }
 
-// Helper to check if it's a unit (literal)
-const isUnit = (s: unknown): boolean => {
+const isUnit = (s: ArkTypeSchema): boolean => {
 	const json = getJson(s)
-	if (!json || Array.isArray(json) || typeof json === 'string') return false
+	if (Array.isArray(json) || typeof json === 'string') return false
 	return 'unit' in json
 }
 
-// Helper to check if it's a union (array of options)
-const isUnionJson = (s: unknown): boolean => {
-	const json = getJson(s)
-	return Array.isArray(json)
-}
+const isUnionJson = (s: ArkTypeSchema): boolean => Array.isArray(getJson(s))
 
-export const arktypeAdapter = defineAdapter({
+export const arktypeAdapter = defineAdapter<ArkTypeSchema>({
 	vendor: 'arktype',
 
-	match: isArkType,
+	match: isArkTypeSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => hasDomain(s, 'string'),
@@ -312,10 +298,7 @@ export const arktypeAdapter = defineAdapter({
 	},
 
 	// ============ Metadata ============
-	getDescription: (s) => {
-		if (!isArkType(s)) return undefined
-		return s.description
-	},
+	getDescription: (s) => s.description,
 
 	getTitle: () => undefined,
 

@@ -8,8 +8,21 @@
 import { withValidateSync } from '../helpers.js'
 import { defineAdapter, type SchemaConstraints } from '../types.js'
 
-// Yup schema internal structure
-interface YupDef {
+// ============================================================================
+// Schema Type (exported for type inference)
+// ============================================================================
+
+/** Yup schema shape for type inference */
+export interface YupSchema {
+	__isYupSchema__: true
+	spec?: YupSpec
+	fields?: Record<string, unknown>
+	types?: unknown[]
+	validate?: (data: unknown) => Promise<unknown>
+	validateSync?: (data: unknown) => unknown
+}
+
+interface YupSpec {
 	type?: string
 	innerType?: unknown
 	fields?: Record<string, unknown>
@@ -23,23 +36,21 @@ interface YupDef {
 	meta?: { title?: string; description?: string; examples?: unknown[]; deprecated?: boolean }
 }
 
-const getSpec = (s: unknown): YupDef | null => {
-	if (s && typeof s === 'object' && '__isYupSchema__' in s) {
-		return (s as { spec?: YupDef }).spec ?? null
-	}
-	return null
+// Type guard
+const isYupSchema = (s: unknown): s is YupSchema => {
+	return s != null && typeof s === 'object' && '__isYupSchema__' in s && s.__isYupSchema__ === true
 }
 
-const getType = (s: unknown): string | null => {
-	const spec = getSpec(s)
-	return spec?.type ?? null
-}
+// Helper to get spec
+const getSpec = (s: YupSchema): YupSpec | null => s.spec ?? null
 
-export const yupAdapter = defineAdapter({
+// Helper to get type
+const getType = (s: YupSchema): string | null => getSpec(s)?.type ?? null
+
+export const yupAdapter = defineAdapter<YupSchema>({
 	vendor: 'yup',
 
-	match: (s) =>
-		s != null && typeof s === 'object' && '__isYupSchema__' in s && s.__isYupSchema__ === true,
+	match: isYupSchema,
 
 	// ============ Type Detection ============
 	isString: (s) => getType(s) === 'string',
@@ -93,9 +104,9 @@ export const yupAdapter = defineAdapter({
 
 	// ============ Extract ============
 	getObjectEntries: (s) => {
-		const spec = getSpec(s)
 		if (getType(s) !== 'object') return []
-		const fields = spec?.fields ?? (s as { fields?: Record<string, unknown> }).fields
+		const spec = getSpec(s)
+		const fields = spec?.fields ?? s.fields
 		return fields ? Object.entries(fields) : []
 	},
 
@@ -113,11 +124,7 @@ export const yupAdapter = defineAdapter({
 		return spec?.oneOf ?? []
 	},
 
-	getTupleItems: (s) => {
-		// Yup tuple has types array
-		const types = (s as { types?: unknown[] }).types
-		return types ?? []
-	},
+	getTupleItems: (s) => s.types ?? [],
 
 	getRecordKeyType: () => null,
 	getRecordValueType: () => null,
@@ -190,12 +197,12 @@ export const yupAdapter = defineAdapter({
 
 	validateAsync: async (s, data) => {
 		// Yup has validate() for async
-		if (typeof (s as { validate?: unknown }).validate !== 'function') {
+		if (typeof s.validate !== 'function') {
 			return { success: false, issues: [{ message: 'Invalid Yup schema' }] }
 		}
 
 		try {
-			const result = await (s as { validate: (d: unknown) => Promise<unknown> }).validate(data)
+			const result = await s.validate(data)
 			return { success: true, data: result }
 		} catch (error) {
 			const yupError = error as { errors?: string[]; path?: string }
