@@ -912,11 +912,16 @@ function validateRuntypes(schema: unknown, data: unknown): ValidationResult<unkn
 async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Promise<JSONSchema> {
 	switch (vendor) {
 		case 'zod': {
+			// Zod 4+ has native toJSONSchema() method
+			if (hasMethod(schema, 'toJSONSchema')) {
+				return (schema as { toJSONSchema: () => unknown }).toJSONSchema() as JSONSchema
+			}
+			// Fallback to zod-to-json-schema for Zod 3
 			try {
 				const { zodToJsonSchema } = await import('zod-to-json-schema')
 				return zodToJsonSchema(schema as Parameters<typeof zodToJsonSchema>[0]) as JSONSchema
 			} catch {
-				throw new Error('zod-to-json-schema not installed. Run: npm install zod-to-json-schema')
+				throw new Error('Zod 4+ required, or install zod-to-json-schema for Zod 3')
 			}
 		}
 		case 'valibot': {
@@ -965,6 +970,11 @@ async function toJsonSchemaByVendor(vendor: SchemaVendor, schema: unknown): Prom
 function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSchema {
 	switch (vendor) {
 		case 'zod': {
+			// Zod 4+ has native toJSONSchema() method
+			if (hasMethod(schema, 'toJSONSchema')) {
+				return (schema as { toJSONSchema: () => unknown }).toJSONSchema() as JSONSchema
+			}
+			// Fallback to zod-to-json-schema for Zod 3
 			try {
 				// eslint-disable-next-line @typescript-eslint/no-require-imports
 				const { zodToJsonSchema } = require('zod-to-json-schema') as {
@@ -972,7 +982,7 @@ function toJsonSchemaSyncByVendor(vendor: SchemaVendor, schema: unknown): JSONSc
 				}
 				return zodToJsonSchema(schema)
 			} catch {
-				throw new Error('zod-to-json-schema not installed. Run: npm install zod-to-json-schema')
+				throw new Error('Zod 4+ required, or install zod-to-json-schema for Zod 3')
 			}
 		}
 		case 'valibot': {
