@@ -9,6 +9,18 @@
 
 ### 🔧 Chores
 
+- bump @sylphx/bump to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
+- regenerate bun.lock ([f80e9bf](https://github.com/SylphxAI/anyschema/commit/f80e9bf7ddb11110fefefa61de86a1431da2433f))
+
+## 0.1.0 (2025-11-30)
+
+### 🐛 Bug Fixes
+
+- rename to @sylphx/anyschema, reset to 0.1.0 ([0a329fa](https://github.com/SylphxAI/anyschema/commit/0a329fab5b000eaa4d12444dd4507357c4154bb5))
+- **ci:** restore shared workflow, add prepack for build ([0efa746](https://github.com/SylphxAI/anyschema/commit/0efa7462f012a90c1ef25db1cb5d1832d6b6c22c))
+
+### 🔧 Chores
+
 - regenerate bun.lock ([f80e9bf](https://github.com/SylphxAI/anyschema/commit/f80e9bf7ddb11110fefefa61de86a1431da2433f))
 
 ## 0.1.0 (2025-11-30)
