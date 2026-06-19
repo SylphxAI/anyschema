@@ -66,7 +66,9 @@ export async function withStandardSchemaAsync(
 	schema: unknown,
 	data: unknown
 ): Promise<ValidationResult<unknown> | null> {
-	const std = schema as { '~standard'?: { validate?: (data: unknown) => unknown | Promise<unknown> } }
+	const std = schema as {
+		'~standard'?: { validate?: (data: unknown) => unknown | Promise<unknown> }
+	}
 	if (!std['~standard']?.validate) return null
 
 	const result = (await std['~standard'].validate(data)) as {
