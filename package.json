@@ -37,7 +37,6 @@
 		"test": "bun test",
 		"typecheck": "tsc --noEmit",
 		"prepack": "bun run build",
-		"prepublishOnly": "bunx @sylphx/doctor prepublish",
 		"lint": "biome check .",
 		"format": "biome format --write ."
 	},
@@ -70,7 +69,6 @@
 		"@sinclair/typebox": "^0.34.41",
 		"@sylphx/biome-config": "^0.4.0",
 		"@sylphx/bump": "^1.4.11",
-		"@sylphx/doctor": "^1.25.0",
 		"@sylphx/tsconfig": "^0.3.0",
 		"@types/node": "^22.15.32",
 		"@valibot/to-json-schema": "^1.0.0",
