@@ -5,7 +5,11 @@
  * Use this when you need to convert schemas to JSON Schema.
  */
 
-import { defineTransformerAdapter, type SchemaConstraints } from '../types.js'
+import {
+	defineTransformerAdapter,
+	type SchemaConstraints,
+	type TransformerAdapter,
+} from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -43,7 +47,7 @@ const getRules = (s: JoiSchema): Array<{ name: string; args?: Record<string, unk
 // Transformer Adapter
 // ============================================================================
 
-export const joiTransformer = defineTransformerAdapter<JoiSchema>({
+export const joiTransformer: TransformerAdapter<JoiSchema> = defineTransformerAdapter<JoiSchema>({
 	vendor: 'joi',
 	match: isJoiSchema,
 

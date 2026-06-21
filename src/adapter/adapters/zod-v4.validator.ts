@@ -6,7 +6,7 @@
  */
 
 import { withSafeParse, withSafeParseAsync } from '../helpers.js'
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -26,7 +26,7 @@ const isZodV4 = (s: unknown): s is ZodV4Schema => {
 // Validator Adapter
 // ============================================================================
 
-export const zodV4Validator = defineValidatorAdapter<ZodV4Schema>({
+export const zodV4Validator: ValidatorAdapter<ZodV4Schema> = defineValidatorAdapter<ZodV4Schema>({
 	vendor: 'zod',
 	match: isZodV4,
 	validate: (s, data) =>

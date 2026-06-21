@@ -6,7 +6,7 @@
  */
 
 import { withValibotRun, withValibotRunAsync } from '../helpers.js'
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -29,12 +29,19 @@ const isValibotSchema = (s: unknown): s is ValibotSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const valibotValidator = defineValidatorAdapter<ValibotSchema>({
-	vendor: 'valibot',
-	match: isValibotSchema,
-	validate: (s, data) =>
-		withValibotRun(s, data) ?? { success: false, issues: [{ message: 'Invalid Valibot schema' }] },
-	validateAsync: async (s, data) =>
-		(await withValibotRunAsync(s, data)) ??
-		withValibotRun(s, data) ?? { success: false, issues: [{ message: 'Invalid Valibot schema' }] },
-})
+export const valibotValidator: ValidatorAdapter<ValibotSchema> =
+	defineValidatorAdapter<ValibotSchema>({
+		vendor: 'valibot',
+		match: isValibotSchema,
+		validate: (s, data) =>
+			withValibotRun(s, data) ?? {
+				success: false,
+				issues: [{ message: 'Invalid Valibot schema' }],
+			},
+		validateAsync: async (s, data) =>
+			(await withValibotRunAsync(s, data)) ??
+			withValibotRun(s, data) ?? {
+				success: false,
+				issues: [{ message: 'Invalid Valibot schema' }],
+			},
+	})

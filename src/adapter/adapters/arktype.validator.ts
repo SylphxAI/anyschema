@@ -6,7 +6,7 @@
  */
 
 import { withCallable } from '../helpers.js'
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -40,11 +40,12 @@ const isArkTypeSchema = (s: unknown): s is ArkTypeSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const arktypeValidator = defineValidatorAdapter<ArkTypeSchema>({
-	vendor: 'arktype',
-	match: isArkTypeSchema,
-	validate: (s, data) =>
-		withCallable(s, data) ?? { success: false, issues: [{ message: 'Invalid ArkType schema' }] },
-	validateAsync: async (s, data) =>
-		withCallable(s, data) ?? { success: false, issues: [{ message: 'Invalid ArkType schema' }] },
-})
+export const arktypeValidator: ValidatorAdapter<ArkTypeSchema> =
+	defineValidatorAdapter<ArkTypeSchema>({
+		vendor: 'arktype',
+		match: isArkTypeSchema,
+		validate: (s, data) =>
+			withCallable(s, data) ?? { success: false, issues: [{ message: 'Invalid ArkType schema' }] },
+		validateAsync: async (s, data) =>
+			withCallable(s, data) ?? { success: false, issues: [{ message: 'Invalid ArkType schema' }] },
+	})

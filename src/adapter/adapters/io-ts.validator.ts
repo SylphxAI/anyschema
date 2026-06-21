@@ -6,7 +6,7 @@
  */
 
 import { withDecode } from '../helpers.js'
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -29,7 +29,7 @@ const isIoTsSchema = (s: unknown): s is IoTsSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const ioTsValidator = defineValidatorAdapter<IoTsSchema>({
+export const ioTsValidator: ValidatorAdapter<IoTsSchema> = defineValidatorAdapter<IoTsSchema>({
 	vendor: 'io-ts',
 	match: isIoTsSchema,
 	validate: (s, data) =>

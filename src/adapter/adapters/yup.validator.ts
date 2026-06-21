@@ -5,7 +5,7 @@
  * Use this when you only need validation, not JSON Schema conversion.
  */
 
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -27,7 +27,7 @@ const isYupSchema = (s: unknown): s is YupSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const yupValidator = defineValidatorAdapter<YupSchema>({
+export const yupValidator: ValidatorAdapter<YupSchema> = defineValidatorAdapter<YupSchema>({
 	vendor: 'yup',
 	match: isYupSchema,
 	validate: (s, data) => {
