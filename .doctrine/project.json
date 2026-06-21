@@ -1,0 +1,141 @@
+{
+	"schemaVersion": 1,
+	"project": {
+		"repo": "SylphxAI/anyschema",
+		"name": "AnySchema",
+		"lifecycle": "production",
+		"layer": "foundation",
+		"summary": "Universal TypeScript schema utility package for validating, detecting, inferring, and converting schemas across common schema libraries.",
+		"goals": [
+			"Provide a zero-runtime-dependency TypeScript package that normalizes validation, type inference, detection, and JSON Schema conversion across supported schema libraries.",
+			"Expose stable package exports for core helpers, adapter factories, built-in validators, built-in transformers, protocol types, and detection utilities.",
+			"Keep schema-library integrations adapter-based and structurally typed so consumers can use their own installed schema libraries without AnySchema owning those libraries."
+		],
+		"nonGoals": [
+			"Own product-specific validation rules, domain schemas, form behavior, HTTP API contracts, or persistence models for consuming projects.",
+			"Reimplement the schema libraries it adapts; AnySchema only detects, validates through, and transforms their public schema shapes.",
+			"Introduce runtime peer dependencies on consumer schema libraries or consumer-specific coupling."
+		]
+	},
+	"boundaries": {
+		"owns": [
+			{
+				"name": "universal-schema-utility",
+				"description": "Core validation, parse, assert, type guard, vendor detection, metadata, and JSON Schema conversion helpers exported by the package."
+			},
+			{
+				"name": "adapter-system",
+				"description": "Adapter interfaces, factory functions, helpers, and built-in validator/transformer adapters for supported schema vendors."
+			},
+			{
+				"name": "anyschema-protocol",
+				"description": "Structural TypeScript protocol types and runtime detection for first-class AnySchema-compatible schemas."
+			}
+		],
+		"doesNotOwn": [
+			"Application or customer domain schemas that consume the package.",
+			"Runtime behavior, migration policy, or product workflows in repositories that use AnySchema.",
+			"Upstream schema library implementations, release lifecycles, or breaking-change policy."
+		],
+		"publicSurfaces": [
+			{
+				"type": "package-export",
+				"name": "@sylphx/anyschema",
+				"location": "package.json#exports[\".\"]"
+			},
+			{
+				"type": "package-export",
+				"name": "@sylphx/anyschema/adapter",
+				"location": "package.json#exports[\"./adapter\"]"
+			},
+			{
+				"type": "package-export",
+				"name": "@sylphx/anyschema/adapter/*",
+				"location": "package.json#exports[\"./adapter/*\"]"
+			},
+			{
+				"type": "documentation",
+				"name": "README usage and API reference",
+				"location": "README.md"
+			},
+			{
+				"type": "documentation",
+				"name": "Architecture overview",
+				"location": "ARCHITECTURE.md"
+			},
+			{
+				"type": "status-context",
+				"name": "CI",
+				"location": ".github/workflows/ci.yml"
+			},
+			{
+				"type": "workflow",
+				"name": "Release",
+				"location": ".github/workflows/release.yml"
+			}
+		],
+		"allowedDependencies": [
+			{
+				"repo": "SylphxAI/.github",
+				"surface": "reusable release workflow and ADR-29 admission action",
+				"direction": "peer-public"
+			},
+			{
+				"repo": "SylphxAI/doctrine",
+				"surface": "project manifest schema and engineering doctrine",
+				"direction": "peer-public"
+			}
+		],
+		"forbiddenCouplings": [
+			"Do not add application-specific validation rules or customer-specific schema behavior to the package core.",
+			"Do not import consumer repository internals, product schemas, runtime services, or persistence code.",
+			"Do not make supported schema vendors runtime dependencies of the published package unless a future ADR changes the zero-dependency contract."
+		]
+	},
+	"documentation": {
+		"adr": {
+			"path": "docs/adr/",
+			"status": "planned"
+		},
+		"specs": {
+			"path": "docs/specs/",
+			"status": "planned"
+		},
+		"catalog": {
+			"path": ".doctrine/project.json",
+			"status": "present"
+		},
+		"runbooks": {
+			"path": "docs/runbooks/",
+			"status": "not-applicable"
+		},
+		"generatedReferences": {
+			"path": "dist/",
+			"status": "generated"
+		}
+	},
+	"delivery": {
+		"ciModel": "adr29-admission",
+		"requiredContexts": ["ci"],
+		"deployPath": "Pushes to main run .github/workflows/release.yml, which calls the SylphxAI/.github reusable release workflow and publishes the npm package.",
+		"productionProof": "Release proof is a successful GitHub Release workflow on main plus npm package readback for @sylphx/anyschema at the released version.",
+		"recoveryClass": "source-revertable"
+	},
+	"adoption": {
+		"status": "baseline",
+		"gaps": [
+			{
+				"id": "stable-admission-required-contexts",
+				"description": "Workflow emits ADR-29 fan-in contexts, but branch protection currently requires raw ci; migrate required contexts when central admission rollout reaches this repo.",
+				"owner": "SylphxAI/doctrine#45",
+				"target": "central ADR-29 required-context rollout"
+			},
+			{
+				"id": "adr-spec-doc-tree",
+				"description": "Repo has README and ARCHITECTURE.md but no docs/adr or docs/specs tree yet; add ADRs/specs when the next material architecture or public-contract change occurs.",
+				"owner": "SylphxAI/anyschema",
+				"target": "next material architecture or public-contract change"
+			}
+		]
+	}
+}
