@@ -5,7 +5,7 @@
  * Use this when you only need validation, not JSON Schema conversion.
  */
 
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -29,7 +29,7 @@ const isJoiSchema = (s: unknown): s is JoiSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const joiValidator = defineValidatorAdapter<JoiSchema>({
+export const joiValidator: ValidatorAdapter<JoiSchema> = defineValidatorAdapter<JoiSchema>({
 	vendor: 'joi',
 	match: isJoiSchema,
 	validate: (s, data) => {

@@ -5,7 +5,7 @@
  * Use this when you need to convert schemas to JSON Schema.
  */
 
-import { defineTransformerAdapter } from '../types.js'
+import { defineTransformerAdapter, type TransformerAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -40,151 +40,153 @@ const getName = (s: IoTsSchema): string | null => s.name ?? null
 // Transformer Adapter
 // ============================================================================
 
-export const ioTsTransformer = defineTransformerAdapter<IoTsSchema>({
-	vendor: 'io-ts',
-	match: isIoTsSchema,
+export const ioTsTransformer: TransformerAdapter<IoTsSchema> = defineTransformerAdapter<IoTsSchema>(
+	{
+		vendor: 'io-ts',
+		match: isIoTsSchema,
 
-	// ============ Type Detection ============
-	isString: (s) => getTag(s) === 'StringType' || getName(s) === 'string',
-	isNumber: (s) => getTag(s) === 'NumberType' || getName(s) === 'number',
-	isBoolean: (s) => getTag(s) === 'BooleanType' || getName(s) === 'boolean',
-	isNull: (s) => getTag(s) === 'NullType' || getName(s) === 'null',
-	isUndefined: (s) => getTag(s) === 'UndefinedType' || getName(s) === 'undefined',
-	isVoid: (s) => getTag(s) === 'VoidType' || getName(s) === 'void',
-	isAny: (s) => getTag(s) === 'AnyType',
-	isUnknown: (s) => getTag(s) === 'UnknownType',
-	isNever: (s) => getTag(s) === 'NeverType',
-	isObject: (s) =>
-		getTag(s) === 'InterfaceType' ||
-		getTag(s) === 'PartialType' ||
-		getTag(s) === 'ExactType' ||
-		getTag(s) === 'StrictType',
-	isArray: (s) => getTag(s) === 'ArrayType' || getTag(s) === 'ReadonlyArrayType',
-	isUnion: (s) => getTag(s) === 'UnionType',
-	isLiteral: (s) => getTag(s) === 'LiteralType',
-	isEnum: (s) => getTag(s) === 'KeyofType', // io-ts keyof is like enum
-	isOptional: () => false, // io-ts uses union with undefined
-	isNullable: () => false, // io-ts uses union with null
-	isTuple: (s) => getTag(s) === 'TupleType',
-	isRecord: (s) => getTag(s) === 'DictionaryType',
-	isMap: () => false,
-	isSet: () => false,
-	isIntersection: (s) => getTag(s) === 'IntersectionType',
-	isLazy: (s) => getTag(s) === 'RecursiveType',
-	isTransform: () => false, // io-ts doesn't have transforms
-	isRefine: (s) => getTag(s) === 'RefinementType',
-	isDefault: () => false,
-	isCatch: () => false,
-	isBranded: (s) => getTag(s) === 'BrandType',
-	isDate: () => false, // io-ts-types has DateFromISOString
-	isBigInt: (s) => getTag(s) === 'BigIntType',
-	isSymbol: () => false,
-	isFunction: (s) => getTag(s) === 'FunctionType',
-	isPromise: () => false,
-	isInstanceOf: () => false,
+		// ============ Type Detection ============
+		isString: (s) => getTag(s) === 'StringType' || getName(s) === 'string',
+		isNumber: (s) => getTag(s) === 'NumberType' || getName(s) === 'number',
+		isBoolean: (s) => getTag(s) === 'BooleanType' || getName(s) === 'boolean',
+		isNull: (s) => getTag(s) === 'NullType' || getName(s) === 'null',
+		isUndefined: (s) => getTag(s) === 'UndefinedType' || getName(s) === 'undefined',
+		isVoid: (s) => getTag(s) === 'VoidType' || getName(s) === 'void',
+		isAny: (s) => getTag(s) === 'AnyType',
+		isUnknown: (s) => getTag(s) === 'UnknownType',
+		isNever: (s) => getTag(s) === 'NeverType',
+		isObject: (s) =>
+			getTag(s) === 'InterfaceType' ||
+			getTag(s) === 'PartialType' ||
+			getTag(s) === 'ExactType' ||
+			getTag(s) === 'StrictType',
+		isArray: (s) => getTag(s) === 'ArrayType' || getTag(s) === 'ReadonlyArrayType',
+		isUnion: (s) => getTag(s) === 'UnionType',
+		isLiteral: (s) => getTag(s) === 'LiteralType',
+		isEnum: (s) => getTag(s) === 'KeyofType', // io-ts keyof is like enum
+		isOptional: () => false, // io-ts uses union with undefined
+		isNullable: () => false, // io-ts uses union with null
+		isTuple: (s) => getTag(s) === 'TupleType',
+		isRecord: (s) => getTag(s) === 'DictionaryType',
+		isMap: () => false,
+		isSet: () => false,
+		isIntersection: (s) => getTag(s) === 'IntersectionType',
+		isLazy: (s) => getTag(s) === 'RecursiveType',
+		isTransform: () => false, // io-ts doesn't have transforms
+		isRefine: (s) => getTag(s) === 'RefinementType',
+		isDefault: () => false,
+		isCatch: () => false,
+		isBranded: (s) => getTag(s) === 'BrandType',
+		isDate: () => false, // io-ts-types has DateFromISOString
+		isBigInt: (s) => getTag(s) === 'BigIntType',
+		isSymbol: () => false,
+		isFunction: (s) => getTag(s) === 'FunctionType',
+		isPromise: () => false,
+		isInstanceOf: () => false,
 
-	// ============ Unwrap ============
-	unwrap: (s) => {
-		const tag = getTag(s)
+		// ============ Unwrap ============
+		unwrap: (s) => {
+			const tag = getTag(s)
 
-		// RefinementType, BrandType have type property
-		if (tag === 'RefinementType' || tag === 'BrandType') {
+			// RefinementType, BrandType have type property
+			if (tag === 'RefinementType' || tag === 'BrandType') {
+				return s.type ?? null
+			}
+
+			// RecursiveType has runDefinition
+			if (tag === 'RecursiveType') {
+				return typeof s.runDefinition === 'function' ? s.runDefinition() : null
+			}
+
+			// ExactType, StrictType have props wrapped
+			if (tag === 'ExactType' || tag === 'StrictType') {
+				return s.type ?? null
+			}
+
+			return null
+		},
+
+		// ============ Extract ============
+		getObjectEntries: (s) => {
+			const tag = getTag(s)
+			if (tag !== 'InterfaceType' && tag !== 'PartialType') return []
+			return s.props ? Object.entries(s.props) : []
+		},
+
+		getArrayElement: (s) => {
+			const tag = getTag(s)
+			if (tag !== 'ArrayType' && tag !== 'ReadonlyArrayType') return null
 			return s.type ?? null
-		}
+		},
 
-		// RecursiveType has runDefinition
-		if (tag === 'RecursiveType') {
-			return typeof s.runDefinition === 'function' ? s.runDefinition() : null
-		}
+		getUnionOptions: (s) => {
+			if (getTag(s) !== 'UnionType') return []
+			return s.types ?? []
+		},
 
-		// ExactType, StrictType have props wrapped
-		if (tag === 'ExactType' || tag === 'StrictType') {
-			return s.type ?? null
-		}
+		getLiteralValue: (s) => {
+			if (getTag(s) !== 'LiteralType') return undefined
+			return s.value
+		},
 
-		return null
-	},
+		getEnumValues: (s) => {
+			if (getTag(s) !== 'KeyofType') return []
+			// KeyofType has keys property
+			const keys = (s as unknown as { keys: Record<string, unknown> }).keys
+			return keys ? Object.keys(keys) : []
+		},
 
-	// ============ Extract ============
-	getObjectEntries: (s) => {
-		const tag = getTag(s)
-		if (tag !== 'InterfaceType' && tag !== 'PartialType') return []
-		return s.props ? Object.entries(s.props) : []
-	},
+		getTupleItems: (s) => {
+			if (getTag(s) !== 'TupleType') return []
+			return s.types ?? []
+		},
 
-	getArrayElement: (s) => {
-		const tag = getTag(s)
-		if (tag !== 'ArrayType' && tag !== 'ReadonlyArrayType') return null
-		return s.type ?? null
-	},
+		getRecordKeyType: (s) => {
+			if (getTag(s) !== 'DictionaryType') return null
+			return s.domain ?? null
+		},
 
-	getUnionOptions: (s) => {
-		if (getTag(s) !== 'UnionType') return []
-		return s.types ?? []
-	},
+		getRecordValueType: (s) => {
+			if (getTag(s) !== 'DictionaryType') return null
+			return s.codomain ?? null
+		},
 
-	getLiteralValue: (s) => {
-		if (getTag(s) !== 'LiteralType') return undefined
-		return s.value
-	},
+		getMapKeyType: () => null,
+		getMapValueType: () => null,
+		getSetElement: () => null,
 
-	getEnumValues: (s) => {
-		if (getTag(s) !== 'KeyofType') return []
-		// KeyofType has keys property
-		const keys = (s as unknown as { keys: Record<string, unknown> }).keys
-		return keys ? Object.keys(keys) : []
-	},
+		getIntersectionSchemas: (s) => {
+			if (getTag(s) !== 'IntersectionType') return []
+			return s.types ?? []
+		},
 
-	getTupleItems: (s) => {
-		if (getTag(s) !== 'TupleType') return []
-		return s.types ?? []
-	},
+		getPromiseInner: () => null,
+		getInstanceOfClass: () => null,
 
-	getRecordKeyType: (s) => {
-		if (getTag(s) !== 'DictionaryType') return null
-		return s.domain ?? null
-	},
+		// ============ Constraints ============
+		getConstraints: () => null, // io-ts doesn't have built-in constraints
 
-	getRecordValueType: (s) => {
-		if (getTag(s) !== 'DictionaryType') return null
-		return s.codomain ?? null
-	},
-
-	getMapKeyType: () => null,
-	getMapValueType: () => null,
-	getSetElement: () => null,
-
-	getIntersectionSchemas: (s) => {
-		if (getTag(s) !== 'IntersectionType') return []
-		return s.types ?? []
-	},
-
-	getPromiseInner: () => null,
-	getInstanceOfClass: () => null,
-
-	// ============ Constraints ============
-	getConstraints: () => null, // io-ts doesn't have built-in constraints
-
-	// ============ Metadata ============
-	getDescription: () => undefined,
-	getTitle: (s) => {
-		const name = getName(s)
-		// Don't use primitive type names as titles - they're not useful
-		if (!name) return undefined
-		const primitives = [
-			'string',
-			'number',
-			'boolean',
-			'null',
-			'undefined',
-			'void',
-			'unknown',
-			'any',
-		]
-		if (primitives.includes(name)) return undefined
-		return name
-	},
-	getDefault: () => undefined,
-	getExamples: () => undefined,
-	isDeprecated: () => false,
-})
+		// ============ Metadata ============
+		getDescription: () => undefined,
+		getTitle: (s) => {
+			const name = getName(s)
+			// Don't use primitive type names as titles - they're not useful
+			if (!name) return undefined
+			const primitives = [
+				'string',
+				'number',
+				'boolean',
+				'null',
+				'undefined',
+				'void',
+				'unknown',
+				'any',
+			]
+			if (primitives.includes(name)) return undefined
+			return name
+		},
+		getDefault: () => undefined,
+		getExamples: () => undefined,
+		isDeprecated: () => false,
+	}
+)

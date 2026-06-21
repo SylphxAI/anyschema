@@ -5,7 +5,11 @@
  * Use this when you need to convert schemas to JSON Schema.
  */
 
-import { defineTransformerAdapter, type SchemaConstraints } from '../types.js'
+import {
+	defineTransformerAdapter,
+	type SchemaConstraints,
+	type TransformerAdapter,
+} from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -51,7 +55,7 @@ const getType = (s: YupSchema): string | null => s.type ?? getSpec(s)?.type ?? n
 // Transformer Adapter
 // ============================================================================
 
-export const yupTransformer = defineTransformerAdapter<YupSchema>({
+export const yupTransformer: TransformerAdapter<YupSchema> = defineTransformerAdapter<YupSchema>({
 	vendor: 'yup',
 	match: isYupSchema,
 

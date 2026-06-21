@@ -5,7 +5,7 @@
  * Effect uses decodeUnknownEither for validation.
  */
 
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -30,39 +30,41 @@ const isEffectSchema = (s: unknown): s is EffectSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const effectValidator = defineValidatorAdapter<EffectSchema>({
-	vendor: 'effect',
-	match: isEffectSchema,
+export const effectValidator: ValidatorAdapter<EffectSchema> = defineValidatorAdapter<EffectSchema>(
+	{
+		vendor: 'effect',
+		match: isEffectSchema,
 
-	validate: (s, data) => {
-		try {
-			// Use decodeUnknownSync from @effect/schema/Schema
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { decodeUnknownSync } = require('@effect/schema/Schema')
-			const result = decodeUnknownSync(s)(data)
-			return { success: true as const, data: result }
-		} catch (error) {
-			const effectError = error as { message?: string }
-			return {
-				success: false as const,
-				issues: [{ message: effectError.message ?? 'Validation failed' }],
+		validate: (s, data) => {
+			try {
+				// Use decodeUnknownSync from @effect/schema/Schema
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
+				const { decodeUnknownSync } = require('@effect/schema/Schema')
+				const result = decodeUnknownSync(s)(data)
+				return { success: true as const, data: result }
+			} catch (error) {
+				const effectError = error as { message?: string }
+				return {
+					success: false as const,
+					issues: [{ message: effectError.message ?? 'Validation failed' }],
+				}
 			}
-		}
-	},
+		},
 
-	validateAsync: async (s, data) => {
-		try {
-			const mod = (await import('@effect/schema/Schema')) as unknown as {
-				decodeUnknownSync: (schema: EffectSchema) => (data: unknown) => unknown
+		validateAsync: async (s, data) => {
+			try {
+				const mod = (await import('@effect/schema/Schema')) as unknown as {
+					decodeUnknownSync: (schema: EffectSchema) => (data: unknown) => unknown
+				}
+				const result = mod.decodeUnknownSync(s)(data)
+				return { success: true as const, data: result }
+			} catch (error) {
+				const effectError = error as { message?: string }
+				return {
+					success: false as const,
+					issues: [{ message: effectError.message ?? 'Validation failed' }],
+				}
 			}
-			const result = mod.decodeUnknownSync(s)(data)
-			return { success: true as const, data: result }
-		} catch (error) {
-			const effectError = error as { message?: string }
-			return {
-				success: false as const,
-				issues: [{ message: effectError.message ?? 'Validation failed' }],
-			}
-		}
-	},
-})
+		},
+	}
+)

@@ -6,7 +6,7 @@
  */
 
 import { withCheck } from '../helpers.js'
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -29,16 +29,17 @@ const isRuntypesSchema = (s: unknown): s is RuntypesSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const runtypesValidator = defineValidatorAdapter<RuntypesSchema>({
-	vendor: 'runtypes',
-	match: isRuntypesSchema,
-	validate: (s, data) =>
-		withCheck(s, data) ?? { success: false, issues: [{ message: 'Invalid Runtypes schema' }] },
+export const runtypesValidator: ValidatorAdapter<RuntypesSchema> =
+	defineValidatorAdapter<RuntypesSchema>({
+		vendor: 'runtypes',
+		match: isRuntypesSchema,
+		validate: (s, data) =>
+			withCheck(s, data) ?? { success: false, issues: [{ message: 'Invalid Runtypes schema' }] },
 
-	validateAsync: async (s, data) => {
-		// Runtypes is sync only
-		return (
-			withCheck(s, data) ?? { success: false, issues: [{ message: 'Invalid Runtypes schema' }] }
-		)
-	},
-})
+		validateAsync: async (s, data) => {
+			// Runtypes is sync only
+			return (
+				withCheck(s, data) ?? { success: false, issues: [{ message: 'Invalid Runtypes schema' }] }
+			)
+		},
+	})

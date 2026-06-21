@@ -5,13 +5,13 @@
  * TypeBox uses Value.Check from @sinclair/typebox/value.
  */
 
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
 // ============================================================================
 
-const TypeBoxKind = Symbol.for('TypeBox.Kind')
+const TypeBoxKind: unique symbol = Symbol.for('TypeBox.Kind') as typeof TypeBoxKind
 
 /** TypeBox schema shape for type inference */
 export interface TypeBoxSchema {
@@ -35,67 +35,71 @@ const isTypeBoxSchema = (s: unknown): s is TypeBoxSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const typeboxValidator = defineValidatorAdapter<TypeBoxSchema>({
-	vendor: 'typebox',
-	match: isTypeBoxSchema,
+export const typeboxValidator: ValidatorAdapter<TypeBoxSchema> =
+	defineValidatorAdapter<TypeBoxSchema>({
+		vendor: 'typebox',
+		match: isTypeBoxSchema,
 
-	validate: (s, data) => {
-		try {
-			// eslint-disable-next-line @typescript-eslint/no-require-imports
-			const { Value } = require('@sinclair/typebox/value')
-			if (Value.Check(s, data)) {
-				return { success: true as const, data }
-			}
-			const errors = [...Value.Errors(s, data)] as Array<{ message: string; path?: string }>
-			return {
-				success: false as const,
-				issues: errors.map((e) => {
-					const issue: { message: string; path?: readonly (string | number)[] } = {
-						message: e.message,
-					}
-					if (e.path) {
-						issue.path = e.path.split('/').filter(Boolean)
-					}
-					return issue
-				}),
-			}
-		} catch {
-			return {
-				success: false as const,
-				issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
-			}
-		}
-	},
-
-	validateAsync: async (s, data) => {
-		try {
-			const mod = (await import('@sinclair/typebox/value')) as {
-				Value: {
-					Check: (schema: unknown, value: unknown) => boolean
-					Errors: (schema: unknown, value: unknown) => Iterable<{ message: string; path?: string }>
+		validate: (s, data) => {
+			try {
+				// eslint-disable-next-line @typescript-eslint/no-require-imports
+				const { Value } = require('@sinclair/typebox/value')
+				if (Value.Check(s, data)) {
+					return { success: true as const, data }
+				}
+				const errors = [...Value.Errors(s, data)] as Array<{ message: string; path?: string }>
+				return {
+					success: false as const,
+					issues: errors.map((e) => {
+						const issue: { message: string; path?: readonly (string | number)[] } = {
+							message: e.message,
+						}
+						if (e.path) {
+							issue.path = e.path.split('/').filter(Boolean)
+						}
+						return issue
+					}),
+				}
+			} catch {
+				return {
+					success: false as const,
+					issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
 				}
 			}
-			if (mod.Value.Check(s, data)) {
-				return { success: true as const, data }
-			}
-			const errors = [...mod.Value.Errors(s, data)]
-			return {
-				success: false as const,
-				issues: errors.map((e) => {
-					const issue: { message: string; path?: readonly (string | number)[] } = {
-						message: e.message,
+		},
+
+		validateAsync: async (s, data) => {
+			try {
+				const mod = (await import('@sinclair/typebox/value')) as {
+					Value: {
+						Check: (schema: unknown, value: unknown) => boolean
+						Errors: (
+							schema: unknown,
+							value: unknown
+						) => Iterable<{ message: string; path?: string }>
 					}
-					if (e.path) {
-						issue.path = e.path.split('/').filter(Boolean)
-					}
-					return issue
-				}),
+				}
+				if (mod.Value.Check(s, data)) {
+					return { success: true as const, data }
+				}
+				const errors = [...mod.Value.Errors(s, data)]
+				return {
+					success: false as const,
+					issues: errors.map((e) => {
+						const issue: { message: string; path?: readonly (string | number)[] } = {
+							message: e.message,
+						}
+						if (e.path) {
+							issue.path = e.path.split('/').filter(Boolean)
+						}
+						return issue
+					}),
+				}
+			} catch {
+				return {
+					success: false as const,
+					issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
+				}
 			}
-		} catch {
-			return {
-				success: false as const,
-				issues: [{ message: 'TypeBox validation requires @sinclair/typebox/value' }],
-			}
-		}
-	},
-})
+		},
+	})

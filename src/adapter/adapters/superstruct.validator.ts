@@ -6,7 +6,7 @@
  */
 
 import { withStructValidate } from '../helpers.js'
-import { defineValidatorAdapter } from '../types.js'
+import { defineValidatorAdapter, type ValidatorAdapter } from '../types.js'
 
 // ============================================================================
 // Schema Type
@@ -29,22 +29,23 @@ const isSuperstructSchema = (s: unknown): s is SuperstructSchema => {
 // Validator Adapter
 // ============================================================================
 
-export const superstructValidator = defineValidatorAdapter<SuperstructSchema>({
-	vendor: 'superstruct',
-	match: isSuperstructSchema,
-	validate: (s, data) =>
-		withStructValidate(s, data) ?? {
-			success: false,
-			issues: [{ message: 'Invalid Superstruct schema' }],
-		},
-
-	validateAsync: async (s, data) => {
-		// Superstruct is sync only
-		return (
+export const superstructValidator: ValidatorAdapter<SuperstructSchema> =
+	defineValidatorAdapter<SuperstructSchema>({
+		vendor: 'superstruct',
+		match: isSuperstructSchema,
+		validate: (s, data) =>
 			withStructValidate(s, data) ?? {
 				success: false,
 				issues: [{ message: 'Invalid Superstruct schema' }],
-			}
-		)
-	},
-})
+			},
+
+		validateAsync: async (s, data) => {
+			// Superstruct is sync only
+			return (
+				withStructValidate(s, data) ?? {
+					success: false,
+					issues: [{ message: 'Invalid Superstruct schema' }],
+				}
+			)
+		},
+	})
