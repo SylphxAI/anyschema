@@ -5,6 +5,7 @@
 		"name": "AnySchema",
 		"lifecycle": "production",
 		"layer": "foundation",
+		"policyPool": "library-package",
 		"summary": "Universal TypeScript schema utility package for validating, detecting, inferring, and converting schemas across common schema libraries.",
 		"goals": [
 			"Provide a zero-runtime-dependency TypeScript package that normalizes validation, type inference, detection, and JSON Schema conversion across supported schema libraries.",
@@ -116,6 +117,7 @@
 	},
 	"delivery": {
 		"ciModel": "adr29-admission",
+		"deployable": false,
 		"requiredContexts": ["ci"],
 		"deployPath": "Pushes to main run .github/workflows/release.yml, which calls the SylphxAI/.github reusable release workflow and publishes the npm package.",
 		"productionProof": "Release proof is a successful GitHub Release workflow on main plus npm package readback for @sylphx/anyschema at the released version.",
