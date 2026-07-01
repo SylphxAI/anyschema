@@ -20,7 +20,7 @@
 
 ### 🔧 Chores
 
-- bump @sylphx/bump to 1.4.11 ([fc8225b](https://github.com/SylphxAI/anyschema/commit/fc8225b48189ec4031c20732f98adf6b61933d80))
+- bump Changesets to 1.4.11 ([fc8225b](https://github.com/SylphxAI/anyschema/commit/fc8225b48189ec4031c20732f98adf6b61933d80))
 
 ## 0.1.1 (2025-11-30)
 
@@ -39,7 +39,7 @@
 
 - retry with bump@1.4.9 ([36ed4c6](https://github.com/SylphxAI/anyschema/commit/36ed4c69a3368d36d4efb616bb9e3002d26093fa))
 - re-trigger with bump@1.4.8 ([e24677a](https://github.com/SylphxAI/anyschema/commit/e24677a63dffdc8f9140be9cb4b16caa62291da0))
-- bump @sylphx/bump to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
+- bump Changesets to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
 - regenerate bun.lock ([f80e9bf](https://github.com/SylphxAI/anyschema/commit/f80e9bf7ddb11110fefefa61de86a1431da2433f))
 
 ## 0.1.0 (2025-11-30)
@@ -52,7 +52,7 @@
 ### 🔧 Chores
 
 - re-trigger with bump@1.4.8 ([e24677a](https://github.com/SylphxAI/anyschema/commit/e24677a63dffdc8f9140be9cb4b16caa62291da0))
-- bump @sylphx/bump to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
+- bump Changesets to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
 - regenerate bun.lock ([f80e9bf](https://github.com/SylphxAI/anyschema/commit/f80e9bf7ddb11110fefefa61de86a1431da2433f))
 
 ## 0.1.0 (2025-11-30)
@@ -64,7 +64,7 @@
 
 ### 🔧 Chores
 
-- bump @sylphx/bump to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
+- bump Changesets to 1.4.6 ([6bebae4](https://github.com/SylphxAI/anyschema/commit/6bebae4d836a15e47170a010b2e5ba1b55a5f947))
 - regenerate bun.lock ([f80e9bf](https://github.com/SylphxAI/anyschema/commit/f80e9bf7ddb11110fefefa61de86a1431da2433f))
 
 ## 0.1.0 (2025-11-30)

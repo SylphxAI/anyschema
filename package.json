@@ -68,7 +68,6 @@
 		"@effect/schema": "^0.75.5",
 		"@sinclair/typebox": "^0.34.41",
 		"@sylphx/biome-config": "^0.4.0",
-		"@sylphx/bump": "^1.4.11",
 		"@sylphx/tsconfig": "^0.3.0",
 		"@types/node": "^22.15.32",
 		"@valibot/to-json-schema": "^1.0.0",
